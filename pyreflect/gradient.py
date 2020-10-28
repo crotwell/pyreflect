@@ -12,7 +12,7 @@ import math
 #  tcl version March 1996
 #  python version October 2020 (holy cow software lives for a long time)
 #
-def applyGradient(layers, gradLayerNum, pgrad, sgrad, nlfactor):
+def apply_gradient(layers, gradLayerNum, pgrad, sgrad, nlfactor):
 #
 # layers           list of the layers
 # gradLayerNum     layer index to apply the gradient in

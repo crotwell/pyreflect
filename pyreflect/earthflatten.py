@@ -11,7 +11,7 @@ roundDigits = 5 # to avoid 3.1229999999 instaed of 3.123
 #  tcl version Feb. 1996
 #  python version October 2020
 #
-def applyEFT(layers, nlfactor):
+def apply_eft(layers, nlfactor):
 #
 # nlfactor is approximate layer thickness for the EFT
 #

@@ -235,14 +235,14 @@ class EarthModel:
         out.momentTensor = dict(self.momentTensor)
         return out
     def gradient(self, gradLayerNum, pgrad, sgrad, nlfactor):
-        gradLayers = applyGradient(self.layers, gradLayerNum, pgrad, sgrad, nlfactor)
+        gradLayers = apply_gradient(self.layers, gradLayerNum, pgrad, sgrad, nlfactor)
         out = self.clone()
         out.layers = gradLayers
         return out
     def eft(self, nlfactor):
         if (self.isEFT):
             raise ValueError("Model has already been flattened")
-        eftLayers = applyEFT(self.layers, nlfactor)
+        eftLayers = apply_eft(self.layers, nlfactor)
         out = self.clone()
         out.isEFT = True
         out.layers = eftLayers
