@@ -179,7 +179,7 @@ class EarthModel:
     @property
     def moment_tensor(self):
         return self._moment_tensor
-    @setter
+    @moment_tensor.setter
     def moment_tensor(self, mt):
         if mt.has('m_rr'):
             self._moment_tensor = rtp_to_ned(mt)
