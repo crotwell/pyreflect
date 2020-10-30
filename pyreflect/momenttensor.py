@@ -12,12 +12,12 @@ def rtp_to_ned(rtp_momenttensor):
     """
     mt = rtp_momenttensor
     return {
-      m_dd: mt.m_rr,
-      m_nn: mt.m_tt,
-      m_ee: mt.m_pp,
-      m_nd: mt.m_rt,
-      m_ed: -1*mt.m_rp,
-      m_ne: -1*mt.m_tp
+        "m_dd": mt.m_rr,
+        "m_nn": mt.m_tt,
+        "m_ee": mt.m_pp,
+        "m_nd": mt.m_rt,
+        "m_ed": -1*mt.m_rp,
+        "m_ne": -1*mt.m_tp
     }
 
 
@@ -36,10 +36,10 @@ def ned_to_rtp(ned_momenttensor):
     """
     mt = rtp_momenttensor
     return {
-      m_rr: mt.m_dd,
-      m_tt: mt.m_nn,
-      m_pp: mt.m_ee,
-      m_rt: mt.m_nd,
-      m_rp: -1*mt.m_ed,
-      m_tp: -1*mt.m_ne
+        "m_rr": mt.m_dd,
+        "m_tt": mt.m_nn,
+        "m_pp": mt.m_ee,
+        "m_rt": mt.m_nd,
+        "m_rp": -1*mt.m_ed,
+        "m_tp": -1*mt.m_ne
     }
