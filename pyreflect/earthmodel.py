@@ -2,6 +2,7 @@
 import json
 from .gradient import applyGradient
 from .earthflatten import applyEFT
+from .momenttensor import rtp_to_ned
 
 DIST_SINGLE=1
 DIST_REGULAR=0
@@ -70,7 +71,7 @@ class EarthModel:
         }
         self.sourceDepths: []
         self.receiverDepth = 0
-        self.momentTensor = {
+        self._moment_tensor = {
             "m_nn": 0.0,
             "m_ne": 0.707,
             "m_nd": -0.707,
@@ -175,6 +176,15 @@ class EarthModel:
                 "m_dd": float(line[5])
             }
         return out
+    @property
+    def moment_tensor(self):
+        return self._moment_tensor
+    @setter
+    def moment_tensor(self, mt):
+        if mt.has('m_rr'):
+            self._moment_tensor = rtp_to_ned(mt)
+        else:
+            self._moment_tensor = mt
 
     def asJSON(self):
         out = {
