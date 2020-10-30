@@ -43,3 +43,13 @@ def ned_to_rtp(ned_momenttensor):
         "m_rp": -1*mt.m_ed,
         "m_tp": -1*mt.m_ne
     }
+
+def to_beachballarray(momenttensor):
+    """converts to list suitable for obspy.imaging.beachball
+    """
+    mt = momenttensor
+    if "tensor" in mt:
+        mt = mt.tensor
+    if "m_nn" in mt:
+        mt = ned_to_rtp(mt)
+    return [mt.m_rr, mt.m_tt, mt.m_pp, mt.m_rt, mt.m_rp, mt.m_tp]
