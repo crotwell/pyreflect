@@ -69,9 +69,9 @@ class EarthModel:
             "distanceList": [],
             "azimuth": 45
         }
-        self.sourceDepths: []
+        self.sourceDepths = []
         self.receiverDepth = 0
-        self._moment_tensor = {
+        self._momentTensor = {
             "m_nn": 0.0,
             "m_ne": 0.707,
             "m_nd": -0.707,
@@ -84,6 +84,9 @@ class EarthModel:
         with open(filename, "r") as f:
             lines = f.readlines()
             return EarthModel.parseGER(lines)
+    def writeToFile(self, filename):
+        with open(filename, "w") as f:
+            f.write(self.asGER())
     @staticmethod
     def parseGER(modelLines):
         out = EarthModel()
@@ -177,14 +180,19 @@ class EarthModel:
             }
         return out
     @property
-    def moment_tensor(self):
-        return self._moment_tensor
-    @moment_tensor.setter
-    def moment_tensor(self, mt):
-        if mt.has('m_rr'):
-            self._moment_tensor = rtp_to_ned(mt)
+    def momentTensor(self):
+        return self._momentTensor
+    @momentTensor.setter
+    def momentTensor(self, mt):
+        tensor = mt
+        if 'tensor' in mt:
+            tensor = mt.tensor
+        if 'm_rr' in tensor:
+            self._momentTensor = rtp_to_ned(tensor)
+        elif 'm_nd' in tensor:
+            self._momentTensor = tensor
         else:
-            self._moment_tensor = mt
+            raise ValueError(f"not sure how to interpret tensor: {tensor}")
 
     def asJSON(self):
         out = {
