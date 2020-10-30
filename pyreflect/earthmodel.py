@@ -1,7 +1,7 @@
 
 import json
-from .gradient import applyGradient
-from .earthflatten import applyEFT
+from .gradient import apply_gradient
+from .earthflatten import apply_eft
 from .momenttensor import rtp_to_ned
 
 DIST_SINGLE=1
