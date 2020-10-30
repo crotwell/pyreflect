@@ -71,12 +71,12 @@ class EarthModel:
         self.sourceDepths: []
         self.receiverDepth = 0
         self.momentTensor = {
-            "mxx": 0.0,
-            "mxy": 0.707,
-            "mxz": -0.707,
-            "myy": 0.0,
-            "myz": 0.0,
-            "mzz": 0.0
+            "m_nn": 0.0,
+            "m_ne": 0.707,
+            "m_nd": -0.707,
+            "m_ee": 0.0,
+            "m_ed": 0.0,
+            "m_dd": 0.0
         }
     @staticmethod
     def loadFromFile(filename):
@@ -167,12 +167,12 @@ class EarthModel:
         if i < len(modelLines):
             line = modelLines[i].split()
             out.momentTensor = {
-                "mxx": float(line[0]),
-                "mxy": float(line[1]),
-                "mxz": float(line[2]),
-                "myy": float(line[3]),
-                "myz": float(line[4]),
-                "mzz": float(line[5])
+                "m_nn": float(line[0]),
+                "m_ne": float(line[1]),
+                "m_nd": float(line[2]),
+                "m_ee": float(line[3]),
+                "m_ed": float(line[4]),
+                "m_dd": float(line[5])
             }
         return out
 
@@ -207,7 +207,7 @@ class EarthModel:
         out += f"{' '.join(map(str, self.sourceDepths))}\n"
         out += f"{self.receiverDepth}\n"
         if self.momentTensor:
-            out += f"{self.momentTensor['mxx']} {self.momentTensor['mxy']} {self.momentTensor['mxz']} {self.momentTensor['myy']} {self.momentTensor['myz']} {self.momentTensor['mzz']}\n"
+            out += f"{self.momentTensor['m_nn']} {self.momentTensor['m_ne']} {self.momentTensor['m_nd']} {self.momentTensor['m_ee']} {self.momentTensor['m_ed']} {self.momentTensor['m_dd']}\n"
         return out
     @staticmethod
     def cloneLayer(layer):
