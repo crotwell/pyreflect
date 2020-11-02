@@ -3,6 +3,7 @@ import json
 from .gradient import apply_gradient
 from .earthflatten import apply_eft
 from .momenttensor import rtp_to_ned
+from .velocitymodel import layersFromPrem, createLayer, cloneLayer
 
 DIST_SINGLE=1
 DIST_REGULAR=0
@@ -10,33 +11,14 @@ DIST_IRREGULAR=-1
 
 class EarthModel:
     def __init__(self):
+        self.gradientthick = 10
+        self.eftthick = 5
         self.isEFT = False
         # layers are:
         # thick vp vs rho qp qs  x x x x
         # I think the last 4 are freq parameters for anisotropy but are not used by the code
-        self.layers = [ {
-          "thick": 35,
-          "vp": 6.5,
-          "vs": 3.5,
-          "rho": 2.7,
-          "qp": 1000,
-          "qs": 500,
-          "tp1": 1.0e4,
-          "tp2": 0.0001,
-          "ts1": 1.0e4,
-          "ts2": 0.0001
-        }, {
-          "thick": 0,
-          "vp": 8.1,
-          "vs": 4.67,
-          "rho": 3.32,
-          "qp": 2000,
-          "qs": 1000,
-          "tp1": 1.0e4,
-          "tp2": 0.0001,
-          "ts1": 1.0e4,
-          "ts2": 0.0001
-        }]
+        self.layers = [ createLayer(35, 6.5, 3.5, 2.7),
+                        createLayer(0, 8.1, 4.67, 3.32)]
         self.slowness = {
             "lowcut": 0.005,
             "lowpass": 0.01,
@@ -51,12 +33,6 @@ class EarthModel:
             "numtimepoints": 1024
         }
         self.distance = {
-            "type": DIST_SINGLE,
-            "distance": 100,
-            "azimuth": 45
-        }
-        # or
-        self.distance = {
             "type": DIST_REGULAR,
             "min": 100,
             "delta": 100,
@@ -66,10 +42,16 @@ class EarthModel:
         #or
         self.distance = {
             "type": DIST_IRREGULAR,
-            "distanceList": [],
+            "distanceList": [100, 150, 330],
             "azimuth": 45
         }
-        self.sourceDepths = []
+        # or
+        self.distance = {
+            "type": DIST_SINGLE,
+            "distance": 100,
+            "azimuth": 45
+        }
+        self.sourceDepths = [ 0.001 ]
         self.receiverDepth = 0
         self._momentTensor = {
             "m_nn": 0.0,
@@ -79,6 +61,12 @@ class EarthModel:
             "m_ed": 0.0,
             "m_dd": 0.0
         }
+    @staticmethod
+    def loadPrem(maxdepth, ):
+        model = EarthModel()
+        premLayers = layersFromPrem(maxdepth)
+        model.layers = premLayers
+        return model
     @staticmethod
     def loadFromFile(filename):
         with open(filename, "r") as f:
@@ -98,14 +86,16 @@ class EarthModel:
             layer = {
                   "thick": float(line[0]),
                   "vp": float(line[1]),
+                  "vpgradient": 0.0,
                   "vs": float(line[2]),
+                  "vsgradient": 0.0,
                   "rho": float(line[3]),
                   "qp": float(line[4]),
                   "qs": float(line[5]),
                   "tp1": 1.0e4,
                   "tp2": 0.0001,
                   "ts1": 1.0e4,
-                  "ts2": 0.0001,
+                  "ts2": 0.0001
                 }
             if len(line) >= 9:
                 layer["tp1"]: float(line[6])
@@ -196,6 +186,8 @@ class EarthModel:
 
     def asJSON(self):
         out = {
+            "gradientthick": self.gradientthick,
+            "eftthick": self.eftthick,
             "isEFT": self.isEFT,
             "layers": self.layers,
             "slowness": self.slowness,
@@ -207,9 +199,10 @@ class EarthModel:
         }
         return json.dumps(out, indent=4)
     def asGER(self):
+        self.evalGradients()
         out = f"{len(self.layers)}\n"
         for l in self.layers:
-            out += f"{l['thick']} {l['vp']} {l['vs']} {l['rho']} {l['qp']} {l['qs']} {l['tp1']} {l['tp2']} {l['ts1']} {l['ts2']}\n"
+            out += f"{format(l['thick'], '.2f')} {l['vp']} {l['vs']} {l['rho']} {l['qp']} {l['qs']} {l['tp1']} {l['tp2']} {l['ts1']} {l['ts2']}\n"
         out += f"{self.slowness['lowcut']} {self.slowness['lowpass']} {self.slowness['highpass']} {self.slowness['highcut']} {self.slowness['controlfac']} \n"
         out += f"{self.frequency['min']} {self.frequency['max']} {self.frequency['nyquist']} {self.frequency['numtimepoints']}\n"
         if self.distance['type'] > 0:
@@ -227,24 +220,12 @@ class EarthModel:
         if self.momentTensor:
             out += f"{self.momentTensor['m_nn']} {self.momentTensor['m_ne']} {self.momentTensor['m_nd']} {self.momentTensor['m_ee']} {self.momentTensor['m_ed']} {self.momentTensor['m_dd']}\n"
         return out
-    @staticmethod
-    def cloneLayer(layer):
-        return {
-            "thick": layer["thick"],
-            "vp": layer['vp'],
-            "vs": layer['vs'],
-            "rho": layer['rho'],
-            "qp": layer['qp'],
-            "qs": layer['qs'],
-            "tp1": layer['tp1'],
-            "tp2": layer['tp2'],
-            "ts1": layer['ts1'],
-            "ts2": layer['ts2']
-        }
     def clone(self):
         out = EarthModel()
+        out.gradientthick = self.gradientthick
+        out.eftthick = self.eftthick
         out.isEFT = self.isEFT
-        out.layers = [ EarthModel.cloneLayer(x) for x in self.layers ]
+        out.layers = [ cloneLayer(x) for x in self.layers ]
         out.slowness = dict(self.slowness)
         out.frequency = dict(self.frequency)
         out.distance = dict(self.distance)
@@ -252,28 +233,33 @@ class EarthModel:
         out.receiverDepth = self.receiverDepth
         out.momentTensor = dict(self.momentTensor)
         return out
+    def evalGradients(self):
+        outLayers = self.layers
+        changeMade = True
+        while changeMade:
+            changeMade = False
+            for n in range(len(outLayers)):
+                layer = outLayers[n]
+                if layer["vpgradient"] != 0.0 or layer["vsgradient"] != 0.0:
+                    gradLayers = apply_gradient(outLayers, n, layer['vpgradient'], layer['vsgradient'], self.gradientthick)
+                    changeMade = True
+                    outLayers = gradLayers
+                    break
+        out = self.clone()
+        out.layers = outLayers
+        return out
+
     def gradient(self, gradLayerNum, pgrad, sgrad, nlfactor):
         gradLayers = apply_gradient(self.layers, gradLayerNum, pgrad, sgrad, nlfactor)
         out = self.clone()
         out.layers = gradLayers
         return out
-    def eft(self, nlfactor):
+    def eft(self):
         if (self.isEFT):
             raise ValueError("Model has already been flattened")
-        eftLayers = apply_eft(self.layers, nlfactor)
+        gradMod = self.evalGradients()
+        eftLayers = apply_eft(gradMod.layers, self.eftthick)
         out = self.clone()
         out.isEFT = True
         out.layers = eftLayers
         return out
-
-
-if __name__ == "__main__":
-    with open("../test/testmgen.ger", "r") as f:
-        lines = f.readlines()
-        mod = EarthModel.parseGER(lines)
-        #print(mod.asGER())
-        gradmod = mod.gradient(1, .05, .05, 5)
-        #print(gradmod.asGER())
-        eftmod = gradmod.eft(5)
-        print(eftmod.asGER())
-        print(eftmod.asJson())

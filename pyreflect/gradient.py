@@ -1,4 +1,5 @@
 import math
+from .velocitymodel import cloneLayer
 
 #
 # Replaces a layer with many layers approximationg a gradient in a model
@@ -50,36 +51,21 @@ def apply_gradient(layers, gradLayerNum, pgrad, sgrad, nlfactor):
 
     gradLayers = []
     for i in range(nnl):
-        gradLayers.append( {
-            "thick": round(dz, roundDigits),
-            "vp": round(layerToReplace['vp'] + i * dvp, roundDigits),
-            "vs": round(layerToReplace['vs'] + i * dvs, roundDigits),
-            "rho": round(layerToReplace['rho'] + i * drho, roundDigits),
-            "qp": layerToReplace['qp'],
-            "qs": layerToReplace['qs'],
-            "tp1": layerToReplace['tp1'],
-            "tp2": layerToReplace['tp2'],
-            "ts1": layerToReplace['ts1'],
-            "ts2": layerToReplace['ts2']
-        } )
+        gradLayer = cloneLayer(layerToReplace)
+        gradLayer["vp"] = round(layerToReplace['vp'] + i * dvp, roundDigits)
+        gradLayer["vpgradient"] = 0.0
+        gradLayer["vs"] = round(layerToReplace['vs'] + i * dvs, roundDigits)
+        gradLayer["vsgradient"] = 0.0
+        gradLayer["rho"] = round(layerToReplace['rho'] + i * drho, roundDigits)
+        gradLayers.append(gradLayer)
     preLayers = layers[0:gradLayerNum]
     postLayers = layers[gradLayerNum+1:]
     if len(postLayers) == 1:
         # gradient in layer before halfspace
         #  Set half space parameters equal to prvious layers parameters to avoid
         #  spurious reflections
-        botGradLayer = gradLayers[len(gradLayers)-1]
-        postLayers = [ {
-            "thick": 0.0,
-            "vp": botGradLayer['vp'],
-            "vs": botGradLayer['vs'],
-            "rho": botGradLayer['rho'],
-            "qp": botGradLayer['qp'],
-            "qs": botGradLayer['qs'],
-            "tp1": botGradLayer['tp1'],
-            "tp2": botGradLayer['tp2'],
-            "ts1": botGradLayer['ts1'],
-            "ts2": botGradLayer['ts2']
-        } ]
+        botGradLayer = cloneLayer(gradLayers[len(gradLayers)-1])
+        botGradLayer["thick"] = 0.0
+        postLayers = [ botGradLayer ]
 
     return preLayers + gradLayers + postLayers

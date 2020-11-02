@@ -1,4 +1,5 @@
 import math
+from .velocitymodel import cloneLayer
 
 roundDigits = 5 # to avoid 3.1229999999 instaed of 3.123
 
@@ -46,32 +47,10 @@ def apply_eft(layers, nlfactor):
             layertopf = topf + ifl*ddz
             layerbotf = layertopf + ddz
             expFactor = math.exp((layertopf+layerbotf)/(2*R))
-            out.append({
-                "thick": round(ddz, roundDigits),
-                "vp": round(layerToReplace['vp']*expFactor, roundDigits),
-                "vs": round(layerToReplace['vs']*expFactor, roundDigits),
-                "rho": round(layerToReplace['rho']*math.pow(expFactor, l+2), roundDigits),
-                "qp": layerToReplace['qp'],
-                "qs": layerToReplace['qs'],
-                "tp1": layerToReplace['tp1'],
-                "tp2": layerToReplace['tp2'],
-                "ts1": layerToReplace['ts1'],
-                "ts2": layerToReplace['ts2']
-            })
-    # flatten the halfspace
-    tops = bots
-    topf = R * math.log(R / (R - tops))
-    expFactor = math.exp((layertopf+layerbotf)/(2*R))
-    out.append({
-        "thick": 0.0,
-        "vp": round(layerToReplace['vp']*expFactor, roundDigits),
-        "vs": round(layerToReplace['vs']*expFactor, roundDigits),
-        "rho": round(layerToReplace['rho']*math.pow(expFactor, l+2), roundDigits),
-        "qp": layerToReplace['qp'],
-        "qs": layerToReplace['qs'],
-        "tp1": layerToReplace['tp1'],
-        "tp2": layerToReplace['tp2'],
-        "ts1": layerToReplace['ts1'],
-        "ts2": layerToReplace['ts2']
-    })
+            eftLayer = cloneLayer(layerToReplace)
+            eftLayer["thick"] = round(ddz, roundDigits)
+            eftLayer["vp"] = round(layerToReplace['vp']*expFactor, roundDigits)
+            eftLayer["vs"] = round(layerToReplace['vs']*expFactor, roundDigits)
+            eftLayer["rho"] = round(layerToReplace['rho']*math.pow(expFactor, l+2), roundDigits)
+            out.append(eftLayer)
     return out

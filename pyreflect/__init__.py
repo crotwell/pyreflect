@@ -1,2 +1,3 @@
 
-__all__ = ["earthmodel", "earthflatten", "gradient", "momenttensor", "distaz"]
+__all__ =  ["earthmodel", "earthflatten", "gradient", "momenttensor", "distaz"
+            "velocitymodel"]
