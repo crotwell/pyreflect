@@ -35,11 +35,6 @@ def apply_gradient(layers, gradLayerNum, pgrad, sgrad, nlfactor):
 #         how many new layers do we need
     nnl = math.ceil(layerToReplace['thick']/nlfactor)
 #
-#   here the layer thickness is already smaller than nlfactor so we shouldn't
-#   do anything, just set glayer to be layer
-#
-    if nnl <= 1:
-        return layers
 
     dz = layerToReplace['thick'] / nnl
     dvp = pgrad * layerToReplace['thick'] / nnl
@@ -52,6 +47,7 @@ def apply_gradient(layers, gradLayerNum, pgrad, sgrad, nlfactor):
     gradLayers = []
     for i in range(nnl):
         gradLayer = cloneLayer(layerToReplace)
+        gradLayer["thick"] = dz
         gradLayer["vp"] = round(layerToReplace['vp'] + i * dvp, roundDigits)
         gradLayer["vpgradient"] = 0.0
         gradLayer["vs"] = round(layerToReplace['vs'] + i * dvs, roundDigits)
@@ -66,6 +62,8 @@ def apply_gradient(layers, gradLayerNum, pgrad, sgrad, nlfactor):
         #  spurious reflections
         botGradLayer = cloneLayer(gradLayers[len(gradLayers)-1])
         botGradLayer["thick"] = 0.0
+        gradLayer["vpgradient"] = 0.0
+        gradLayer["vsgradient"] = 0.0
         postLayers = [ botGradLayer ]
 
     return preLayers + gradLayers + postLayers
