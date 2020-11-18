@@ -1,5 +1,7 @@
 
+import pprint
 import json
+import os
 from .gradient import apply_gradient
 from .earthflatten import apply_eft
 from .momenttensor import rtp_to_ned
@@ -11,6 +13,7 @@ DIST_IRREGULAR=-1
 
 class EarthModel:
     def __init__(self):
+        self.name = "default"
         self.gradientthick = 10
         self.eftthick = 5
         self.isEFT = False
@@ -62,16 +65,30 @@ class EarthModel:
             "m_dd": 0.0
         }
     @staticmethod
-    def loadPrem(maxdepth, ):
+    def loadPrem(maxdepth ):
         model = EarthModel()
         premLayers = layersFromPrem(maxdepth)
         model.layers = premLayers
+        model.name = f"prem to {maxdepth}"
         return model
+
+    @staticmethod
+    def loadFromJsonFile(filename):
+        with open(filename, "r") as f:
+            jsonModel = json.load(f)
+            model = EarthModel.fromDict(jsonModel)
+            model.name = os.path.basename(filename)
+            return model
+    def writeToJsonFile(self, filename):
+        with open(filename, "w") as f:
+            f.write(self.asJSON())
     @staticmethod
     def loadFromFile(filename):
         with open(filename, "r") as f:
             lines = f.readlines()
-            return EarthModel.parseGER(lines)
+            model = EarthModel.parseGER(lines)
+            model.name = os.path.basename(filename)
+            return model
     def writeToFile(self, filename):
         with open(filename, "w") as f:
             f.write(self.asGER())
@@ -184,8 +201,8 @@ class EarthModel:
         else:
             raise ValueError(f"not sure how to interpret tensor: {tensor}")
 
-    def asJSON(self):
-        out = {
+    def asDict(self):
+        return {
             "gradientthick": self.gradientthick,
             "eftthick": self.eftthick,
             "isEFT": self.isEFT,
@@ -197,12 +214,33 @@ class EarthModel:
             "receiverDepth": self.receiverDepth,
             "momentTensor": self.momentTensor
         }
-        return json.dumps(out, indent=4)
+    @staticmethod
+    def fromDict(data):
+        model = EarthModel()
+        if "gradientthick" in data: model.gradientthick = data["gradientthick"]
+        if "eftthick" in data: model.eftthick = data["eftthick"]
+        if "layers" in data: model.layers = data["layers"]
+        if "slowness" in data: model.slowness = data["slowness"]
+        if "frequency" in data: model.frequency = data["frequency"]
+        if "distance" in data: model.distance = data["distance"]
+        if "sourceDepths" in data: model.sourceDepths = data["sourceDepths"]
+        if "receiverDepth" in data: model.receiverDepth = data["receiverDepth"]
+        if "momentTensor" in data: model.momentTensor = data["momentTensor"]
+        return model
+    def asJSON(self):
+        return json.dumps(self.asDict(), indent=4)
+    @staticmethod
+    def __format_line_as_GER__(items):
+        stringItems = [format(x, '.2f') for x in items]
+        return " ".join(stringItems)+"\n"
+
     def asGER(self):
         self.evalGradients()
         out = f"{len(self.layers)}\n"
         for l in self.layers:
-            out += f"{format(l['thick'], '.2f')} {l['vp']} {l['vs']} {l['rho']} {l['qp']} {l['qs']} {l['tp1']} {l['tp2']} {l['ts1']} {l['ts2']}\n"
+            items = [ l['thick'], l['vp'], l['vs'], l['rho'], l['qp'], l['qs'], l['tp1'], l['tp2'], l['ts1'], l['ts2']]
+            out += self.__format_line_as_GER__(items)
+#            out += f"{format(l['thick'], '.2f')} {l['vp']} {l['vs']} {l['rho']} {l['qp']} {l['qs']} {l['tp1']} {l['tp2']} {l['ts1']} {l['ts2']}\n"
         out += f"{self.slowness['lowcut']} {self.slowness['lowpass']} {self.slowness['highpass']} {self.slowness['highcut']} {self.slowness['controlfac']} \n"
         out += f"{self.frequency['min']} {self.frequency['max']} {self.frequency['nyquist']} {self.frequency['numtimepoints']}\n"
         if self.distance['type'] > 0:
@@ -263,3 +301,5 @@ class EarthModel:
         out.isEFT = True
         out.layers = eftLayers
         return out
+    def __str__(self):
+        return pprint.pformat(self.asDict())
