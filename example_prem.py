@@ -5,8 +5,15 @@ from pyreflect import earthmodel, distaz, momenttensor
 # load model file for PREM down to 85 km depth
 model = earthmodel.EarthModel.loadPrem(85)
 
-# write it out, spherical, just to look at, gradients evaluated
-model.writeToFile("testprem.ger")
+# pretty print all the model parameters as json,
+# this should help if you need to modify things:
+model.writeToJsonFile("testprem.json")
 
-# apply EFT and write out, suitable for running
-model.eft().writeToFile("testprem_eft.ger")
+# after editing, can load it back in with
+othermodel = earthmodel.EarthModel.loadFromJsonFile("testprem.json")
+# write out in GER form without the eft, for looking at model
+othermodel.writeToFile("modifiedprem.ger")
+# and then write back out for actual running synthetics
+othermodel.eft().writeToFile("modifiedprem_eft.ger")
+# and then run with
+# mgenkennett modifiedprem_eft.ger
