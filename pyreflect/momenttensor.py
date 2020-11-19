@@ -1,4 +1,40 @@
 
+def moment_scale_factor(scalar_moment_N_m):
+    """
+
+c     kennett.f generates regional synthetics following kennett (1983)
+c     the units for the kennett synthetic with the specified input
+c     units below are:
+c     u(cm) = Gij(t)*Fj(t)10-15 + Gij,k*Mjk(t)10-20
+c     for F in dynes, M in dyne-cm, * - convolution
+c     so a force of 10**15 dynes and a moment of 10**20 dyne-cm
+c     are both weighting the respective Greens function or derivative
+c     of the Greens function by terms of order 1
+c     kennett synthetic will provide displacement in cm with a factor
+c     of 10**-20, so Mo of 5*10**20 dyne * cm will be computed
+c     by taking 5 times the raw kennett response (for a delta function
+c     Mo(t) response) so the 10**-20 scales down the moment figure.
+c     (or output in velocity for a step function Mo(t) response)
+c     for F(t) in dyne ( or F(w) in dyne * sec )
+c     kennett synthetic will provide displacement in cm with a factor
+c     of 10**-15
+
+Goal is to return scale factor to take moment and seismogram to m/s amp units
+    """
+    one_newton_meter = 1e7 # in dyne cm
+    randall_unit_scale = 1e20 # in cm per dyne cm
+    cm_per_m = 100
+    scale_fac = scalar_moment_N_m * one_newton_meter / randall_unit_scale / cm_per_m
+    return scale_fac
+
+def mw_scale_factor(Mw):
+    """
+    Mw to Mo conversion from Lay and Wallace p. 384, I assumed that Mo is in
+    newton meters hence multiply by 10^7 to change to dyne cm
+    (1 Newton = 10^5 dynes and 1 m = 10^2 cm)
+    """
+    scalar_moment_N_m = math.pow(10,(Mw+10.73)*1.5-7.0)
+    raise Error("no imple yet")
 
 def rtp_to_ned(rtp_momenttensor):
     """Convert a r, theta, phi moment tensor into north, east, down
