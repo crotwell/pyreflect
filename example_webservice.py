@@ -1,30 +1,41 @@
 #!/usr/bin/env python3
 
-from pyreflect import earthmodel, distaz, momenttensor
+import serveobspy
+
+from pyreflect import earthmodel, distaz, momenttensor, specfile, stationmetadata
+import asyncio
+import math
+import pprint
+import numpy
+from io import StringIO, BytesIO
 
 # libcomcat mostly uses same dependencies as obspy, but also needs pyproj
 
 from obspy.clients.fdsn import Client
 from obspy.imaging.beachball import MomentTensor
+from obspy.taup import TauPyModel
 import obspy
 import libcomcat
 from libcomcat.dataframes import find_nearby_events
 from libcomcat.classes import DetailEvent
 from libcomcat.search import search
 from obspy.io.quakeml.core import Unpickler
+from obspy import read
+from obspy.core.trace import Stats
+from obspy.core.utcdatetime import UTCDateTime
 
 
-model = earthmodel.EarthModel.loadPrem(80)
+serveSeis = serveobspy.ServeObsPy('www')
+serveSeis.serveData()
 
-sta_client = Client("IRIS")
 
-start = obspy.UTCDateTime('2020-10-28T09:02:32')
-end = start + 20*60
-
+#start = obspy.UTCDateTime('2020-10-28T09:02:32')
+start = obspy.UTCDateTime('2020-11-13 09:13:51')
+# eq search paramaters
 twindow = 10 # sec
 radius = 100 # km
-lat = -14.9
-lon = -75.6
+lat = 38.169
+lon = -117.853
 minmag = 5
 
 summary_events = search(starttime=start.datetime,
@@ -47,40 +58,122 @@ if de.hasProduct('moment-tensor'):
     origin = event.origins[0]
     fm = event.focal_mechanisms[0]
     #fm = mtcatalog.events[0].preferred_focal_mechanism
-    print(f"{origin.time.format_iris_web_service()} {origin.latitude}/{origin.longitude}  {fm.moment_tensor.tensor}")
-    model.moment_tensor = fm.moment_tensor
-    model.sourceDepths.append(origin.depth/1000) # in km
+    print(f"{origin.time.format_iris_web_service()} {origin.latitude}/{origin.longitude} {fm.moment_tensor.scalar_moment} {fm.moment_tensor.tensor}")
 else:
     print("unable to fine moment tensor for even")
     exit(1)
 
+serveSeis.catalog = mtcatalog
+amp_scale_fac = momenttensor.moment_scale_factor(fm.moment_tensor.scalar_moment)
+print(f"mt scale: {fm.moment_tensor.scalar_moment} Nm,  scale fac: {amp_scale_fac}")
 
-inventory = sta_client.get_stations(network="CO", station="JSC",
+
+
+# find station to calculate distance
+sta_client = Client("IRIS")
+inventory = sta_client.get_stations(network="US", station="TPNV",
                                 level="station",
                                 starttime=start,
-                                endtime=end)
+                                endtime=start+10*60)
 
 network = inventory[0]
 station = network.stations[0]
 
 daz = distaz.DistAz(origin.latitude, origin.longitude, station.latitude, station.longitude)
+
+inventory = sta_client.get_stations(network=network.code, station=station.code,
+                                location="00", channel="LH?,BH?,HH?",
+                                level="response",
+                                starttime=start,
+                                endtime=start+10*60)
+channels = inventory[0].stations[0].channels
+
+serveSeis.inventory=inventory
+
+taumodel = TauPyModel(model="prem" )
+radiusOfEarth = 6371 # for flat to spherical ray param conversion, should get from model
+
+arrivals = taumodel.get_pierce_points(source_depth_in_km=origin.depth/1000,
+                                  distance_in_degree=daz.getDistanceDeg(),
+                                  phase_list=["P", "S", "SSvmp", "SPvmp", "SSvms"])
+maxDepth = 0
+minRayParam = arrivals[0].ray_param
+maxRayParam = minRayParam
+DEPTH_INDEX=3
+for a in arrivals:
+    if minRayParam > a.ray_param:
+        minRayParam = a.ray_param
+    if maxRayParam < a.ray_param:
+        maxRayParam = a.ray_param
+    for p in a.pierce:
+        if p[DEPTH_INDEX] > maxDepth:
+            maxDepth = p[DEPTH_INDEX]
+maxDepth = round(math.ceil(maxDepth + 10)) # little bit deeper
+minRayParam = minRayParam/radiusOfEarth # need to be flat earth ray params
+maxRayParam = maxRayParam/radiusOfEarth
+print(f"ray param: min {minRayParam}  max {maxRayParam}")
+
+# base model, prem down to 80 km
+model = earthmodel.EarthModel.loadPrem(maxDepth)
+model.gradientthick = 25 # probably too big
+model.eftthick = 50 # probably too big
+model.moment_tensor = fm.moment_tensor
+model.sourceDepths = [ origin.depth/1000 ] # in km
 model.distance = {
     "type": earthmodel.DIST_SINGLE,
     "distance": daz.getDistanceKm(),
     "azimuth": daz.az
 }
+model.slowness = {
+    "lowcut": minRayParam/2,
+    "lowpass": minRayParam*0.9,
+    "highpass": maxRayParam*1.1,
+    "highcut": maxRayParam*2,
+    "controlfac": 1.0
+    }
+model.frequency['numtimepoints'] = 4096
 
-inventory = sta_client.get_stations(network=network.code, station=station.code,
-                                location="00", channel="LH?",
-                                level="channel",
-                                starttime=start,
-                                endtime=end)
-channels = inventory[0].stations[0].channels
+
+#print(model)
+
+bandcode = "L"
+gaincode = "H"
+loccode = "SY"
+
+synthinventory = stationmetadata.createMetadata(network,
+                                                station,
+                                                loccode,
+                                                bandcode,
+                                                gaincode,
+                                                model,
+                                                fm.moment_tensor.scalar_moment,
+                                                specfile.AMP_STYLE_VEL)
+print(synthinventory)
+synthinventory = obspy.read_inventory(BytesIO(bytes(synthinventory, 'utf-8')))
+for c in synthinventory[0].stations[0]:
+    print(f"append channel {c}")
+    inventory[0].stations[0].channels.append(c)
+# force update of inventory as now includes synthethic channels
+serveSeis.inventory=inventory
+
+for c in inventory[0].stations[0].channels:
+    print(f"channel: {c}")
+
+for c in station.channels:
+    print(f"sta channel: {c}")
+
+inventory.write("example.staml", format="stationxml")
+
+outfilebase = "test"
+if model.name and len(model.name) > 0:
+    outfilebase = model.name.replace(' ', '_')
+sphFilename = f"{outfilebase}.ger"
+flatFilename = f"{outfilebase}_eft.ger"
 
 # unflattened model (spherical)
-model.writeToFile("testweb.ger")
+model.writeToFile(sphFilename)
 # flattened model
-model.eft().writeToFile("testweb_eft.ger")
+model.eft().writeToFile(flatFilename)
 
 # plot beachball with obspy
 #from obspy.imaging.beachball import beachball
@@ -89,3 +182,94 @@ print(", ".join(str(x) for x in mtArray))
 #fig = beachball(mtArray)
 
 #input("return to quit")
+
+reduceVel = daz.getDistanceKm() / arrivals[0].time
+offset = -30
+
+
+
+starttime = origin.time + daz.getDistanceKm() / reduceVel + offset
+timewidth = model.frequency['numtimepoints'] / model.frequency['nyquist']
+
+# save waveforms locally
+waveforms = sta_client.get_waveforms(network=network.code, station=station.code,
+                                location="00", channel="LH?,BH?,HH?",
+                                starttime=starttime,
+                                endtime=starttime+timewidth)
+for tr in waveforms:
+    tr.write(f"{tr.id}.sac", format='SAC')
+waveforms.attach_response(inventory)
+
+serveSeis.stream = waveforms
+
+async def mgenkennett(model):
+    mgenkennett = '../RandallReflectivity/mgenkennett'
+    await runCode(mgenkennett, model)
+
+
+async def runCode(code, model):
+    modelFilename = "model_mgen_eft.ger"
+    model.eft().writeToFile(modelFilename)
+    proc = await asyncio.create_subprocess_shell(
+        f"{code} {modelFilename}",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE)
+
+    stdout, stderr = await proc.communicate()
+
+    print(f'[{code} exited with {proc.returncode}]')
+    if stdout:
+        print(f'[stdout]\n{stdout.decode()}')
+    if stderr:
+        print(f'[stderr]\n{stderr.decode()}')
+
+
+async def runAndPlot(model):
+    await mgenkennett(model)
+    synthresults = specfile.readSpecFile('mspec', reduceVel=reduceVel, offset=offset)
+    synthwaveforms = None
+    for tsObj in synthresults['timeseries']:
+        distStr = f"D{tsObj['distance']}"[:5].replace('.','_').strip('_')
+        commonHeader = {
+            'sampling_rate': synthresults['inputs']['frequency']['nyquist']*2,
+            'network': network.code,
+            'station': station.code,
+            'channel': bandcode+gaincode+'Z',
+            'location': loccode,
+            'starttime': UTCDateTime(origin.time)+tsObj['timeReduce'],
+            'sac': {
+                    'b': tsObj['timeReduce'],
+                    'dist': tsObj['distance'],
+                    'evdp': tsObj['depth']
+                }
+            }
+        header = Stats(commonHeader)
+        header.component = 'Z'
+        header.npts = len(tsObj['z'])
+        z = obspy.Trace(tsObj['z'], header)
+        header = Stats(commonHeader)
+        header.component = 'R'
+        header.npts = len(tsObj['z'])
+        r = obspy.Trace(tsObj['r'], header)
+        header = Stats(commonHeader)
+        header.component = 'T'
+        header.npts = len(tsObj['z'])
+        t = obspy.Trace(tsObj['t'], header)
+        stream = obspy.Stream(traces=[z, r, t])
+        if synthwaveforms is None:
+            synthwaveforms = stream
+        else:
+            synthwaveforms += stream
+
+    print(f"max: {synthwaveforms.max()}   {waveforms.max()}")
+
+    for tr in synthwaveforms:
+        tr.write(f"{tr.id}.sac", format='SAC')
+
+    both = synthwaveforms+waveforms
+    serveSeis.stream = both
+
+    input("return to quit")
+
+
+asyncio.run(runAndPlot(model))
