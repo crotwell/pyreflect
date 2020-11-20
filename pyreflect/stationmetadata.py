@@ -110,7 +110,7 @@ def createMetadata(network, station, loccode, bandcode, gaincode, model, scalar_
       "sitename": station.site.name,
       "radialaz": model.distance['azimuth'],
       "transverseaz": (model.distance['azimuth']+90) % 360,
-      "gain": moment_scale_factor(scalar_moment_N_m),
+      "gain": 1/moment_scale_factor(scalar_moment_N_m),
       "inputunits": inputunits,
       "sps": model.frequency['nyquist']
     }

@@ -21,10 +21,10 @@ c     of 10**-15
 
 Goal is to return scale factor to take moment and seismogram to m/s amp units
     """
-    one_newton_meter = 1e7 # in dyne cm
+    dyne_cm_per_newton_meter = 1e7 # in dyne cm
     randall_unit_scale = 1e20 # in cm per dyne cm
     cm_per_m = 100
-    scale_fac = scalar_moment_N_m * one_newton_meter / randall_unit_scale / cm_per_m
+    scale_fac = scalar_moment_N_m * dyne_cm_per_newton_meter / randall_unit_scale / cm_per_m
     return scale_fac
 
 def mw_scale_factor(Mw):
