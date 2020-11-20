@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-import serveobspy
-
 from pyreflect import earthmodel, distaz, momenttensor, specfile, stationmetadata
 import asyncio
 import math
@@ -24,24 +22,30 @@ from obspy import read
 from obspy.core.trace import Stats
 from obspy.core.utcdatetime import UTCDateTime
 
+serveSeis = None
 
-serveSeis = serveobspy.ServeObsPy('www')
-serveSeis.serveData()
+try:
+    import serveobspy
+    serveSeis = serveobspy.ServeObsPy('www')
+    serveSeis.serveData()
+except ImportError:
+    serveSeis = None
 
-
+# earthquake origin time
 #start = obspy.UTCDateTime('2020-10-28T09:02:32')
-start = obspy.UTCDateTime('2020-11-13 09:13:51')
+#start = obspy.UTCDateTime('2020-11-13 09:13:51')
+start = obspy.UTCDateTime('2020-11-20T03:19:15')
 # eq search paramaters
 twindow = 10 # sec
-radius = 100 # km
-lat = 38.169
-lon = -117.853
+radius = 3 # deg
+lat = -53.9
+lon = 140.5
 minmag = 5
 
 summary_events = search(starttime=start.datetime,
                         endtime = (start+twindow).datetime,
                         maxradius=radius,
-                        latitude=-lat,
+                        latitude=lat,
                         longitude=lon,
                         minmagnitude=minmag)
 if len(summary_events) == 0:
@@ -63,15 +67,18 @@ else:
     print("unable to fine moment tensor for even")
     exit(1)
 
-serveSeis.catalog = mtcatalog
+if serveSeis is not None:
+    serveSeis.catalog = mtcatalog
 amp_scale_fac = momenttensor.moment_scale_factor(fm.moment_tensor.scalar_moment)
 print(f"mt scale: {fm.moment_tensor.scalar_moment} Nm,  scale fac: {amp_scale_fac}")
 
 
+searchnetcode = "II"
+searchstacode = "TAU"
 
 # find station to calculate distance
 sta_client = Client("IRIS")
-inventory = sta_client.get_stations(network="US", station="TPNV",
+inventory = sta_client.get_stations(network=searchnetcode, station=searchstacode,
                                 level="station",
                                 starttime=start,
                                 endtime=start+10*60)
@@ -88,7 +95,17 @@ inventory = sta_client.get_stations(network=network.code, station=station.code,
                                 endtime=start+10*60)
 channels = inventory[0].stations[0].channels
 
-serveSeis.inventory=inventory
+# find LHZ channel to get sample rate
+lhz_channel = None
+for c in channels:
+    if c.code == 'LHZ':
+        lhz_channel = c
+if lhz_channel is None:
+    raise Error(f"Can't find LHZ channel for {network.code}.{station.code}")
+
+
+if serveSeis is not None:
+    serveSeis.inventory=inventory
 
 taumodel = TauPyModel(model="prem" )
 radiusOfEarth = 6371 # for flat to spherical ray param conversion, should get from model
@@ -100,7 +117,10 @@ maxDepth = 0
 minRayParam = arrivals[0].ray_param
 maxRayParam = minRayParam
 DEPTH_INDEX=3
+earliestArrival = arrivals[0]
 for a in arrivals:
+    if earliestArrival.time > a.time:
+        earliestArrival = a
     if minRayParam > a.ray_param:
         minRayParam = a.ray_param
     if maxRayParam < a.ray_param:
@@ -124,6 +144,9 @@ model.distance = {
     "distance": daz.getDistanceKm(),
     "azimuth": daz.az
 }
+# this windows around the ray params from the arrivals but note that
+# you will get both P and S, so windowing around just an S is not possible
+# care with the time window as arrivals wrap due to fft
 model.slowness = {
     "lowcut": minRayParam/2,
     "lowpass": minRayParam*0.9,
@@ -131,8 +154,13 @@ model.slowness = {
     "highcut": maxRayParam*2,
     "controlfac": 1.0
     }
-model.frequency['numtimepoints'] = 4096
+model.frequency['numtimepoints'] = 1024
+model.frequency['nyquist'] = lhz_channel.sample_rate/2.0
+model.frequency['max'] = lhz_channel.sample_rate/2.0
 
+# change to get all ray param
+model.slowness['lowcut'] = 0
+model.slowness['lowpass'] = 0
 
 #print(model)
 
@@ -154,7 +182,8 @@ for c in synthinventory[0].stations[0]:
     print(f"append channel {c}")
     inventory[0].stations[0].channels.append(c)
 # force update of inventory as now includes synthethic channels
-serveSeis.inventory=inventory
+if serveSeis is not None:
+    serveSeis.inventory=inventory
 
 for c in inventory[0].stations[0].channels:
     print(f"channel: {c}")
@@ -183,13 +212,13 @@ print(", ".join(str(x) for x in mtArray))
 
 #input("return to quit")
 
-reduceVel = daz.getDistanceKm() / arrivals[0].time
+reduceVel = daz.getDistanceKm() / earliestArrival.time
 offset = -30
 
 
 
 starttime = origin.time + daz.getDistanceKm() / reduceVel + offset
-timewidth = model.frequency['numtimepoints'] / model.frequency['nyquist']
+timewidth = model.frequency['numtimepoints'] / (2*model.frequency['nyquist'])
 
 # save waveforms locally
 waveforms = sta_client.get_waveforms(network=network.code, station=station.code,
@@ -200,7 +229,8 @@ for tr in waveforms:
     tr.write(f"{tr.id}.sac", format='SAC')
 waveforms.attach_response(inventory)
 
-serveSeis.stream = waveforms
+if serveSeis is not None:
+    serveSeis.stream = waveforms
 
 async def mgenkennett(model):
     mgenkennett = '../RandallReflectivity/mgenkennett'
@@ -267,9 +297,14 @@ async def runAndPlot(model):
         tr.write(f"{tr.id}.sac", format='SAC')
 
     both = synthwaveforms+waveforms
-    serveSeis.stream = both
+    if serveSeis is not None:
+        serveSeis.stream = both
 
-    input("return to quit")
+    else:
+        both.plot()
+    print("...switching to interactive mode")
+    import code
+    code.interact(local=locals())
 
 
 asyncio.run(runAndPlot(model))
