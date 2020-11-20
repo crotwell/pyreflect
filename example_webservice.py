@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
-from pyreflect import earthmodel, distaz, momenttensor, specfile, stationmetadata
+from pyreflect import earthmodel, velocitymodel, distaz, momenttensor, specfile, stationmetadata
 import asyncio
 import math
+import os
 import pprint
 import numpy
 from io import StringIO, BytesIO
@@ -10,7 +11,7 @@ from io import StringIO, BytesIO
 # libcomcat mostly uses same dependencies as obspy, but also needs pyproj
 
 from obspy.clients.fdsn import Client
-from obspy.imaging.beachball import MomentTensor
+from obspy.imaging.beachball import MomentTensor, beachball
 from obspy.taup import TauPyModel
 import obspy
 import libcomcat
@@ -22,6 +23,13 @@ from obspy import read
 from obspy.core.trace import Stats
 from obspy.core.utcdatetime import UTCDateTime
 
+# name the run, this will create a directory to output lots of files
+runName = "tasmania_prem"
+if not os.path.exists(runName):
+    os.mkdir(runName)
+
+# if using the viewObspy example from seisplotjs:
+# see http://crotwell.github.io/seisplotjs/examples/viewobspy/index.html
 serveSeis = None
 
 try:
@@ -32,8 +40,7 @@ except ImportError:
     serveSeis = None
 
 # earthquake origin time
-#start = obspy.UTCDateTime('2020-10-28T09:02:32')
-#start = obspy.UTCDateTime('2020-11-13 09:13:51')
+# this event is a 5.5 south of Australia
 start = obspy.UTCDateTime('2020-11-20T03:19:15')
 # eq search paramaters
 twindow = 10 # sec
@@ -42,6 +49,11 @@ lat = -53.9
 lon = 140.5
 minmag = 5
 
+# use station II.TAU, in Tasmania as it is close
+searchnetcode = "II"
+searchstacode = "TAU"
+
+# serach for events
 summary_events = search(starttime=start.datetime,
                         endtime = (start+twindow).datetime,
                         maxradius=radius,
@@ -52,6 +64,8 @@ if len(summary_events) == 0:
     print("unable to find event")
     exit(1)
 
+# Use the first event (hopefully only) event found
+# extract moment tensor and origin parameters
 de = summary_events[0].getDetailEvent()
 if de.hasProduct('moment-tensor'):
     mtProd = de.getProducts('moment-tensor')
@@ -63,9 +77,20 @@ if de.hasProduct('moment-tensor'):
     fm = event.focal_mechanisms[0]
     #fm = mtcatalog.events[0].preferred_focal_mechanism
     print(f"{origin.time.format_iris_web_service()} {origin.latitude}/{origin.longitude} {fm.moment_tensor.scalar_moment} {fm.moment_tensor.tensor}")
+    # save quakeml to file
+    mtcatalog.write(os.path.join(runName, "event.qml"), format="QUAKEML")
 else:
-    print("unable to fine moment tensor for even")
+    print("unable to fine moment tensor for evet")
     exit(1)
+
+
+# plot beachball with obspy
+#from obspy.imaging.beachball import beachball
+mtArray = momenttensor.to_beachballarray(fm.moment_tensor.tensor)
+print(", ".join(str(x) for x in mtArray))
+beachball(mtArray, outfile=os.path.join(runName, "beachball.png"))
+
+
 
 if serveSeis is not None:
     serveSeis.catalog = mtcatalog
@@ -73,26 +98,30 @@ amp_scale_fac = momenttensor.moment_scale_factor(fm.moment_tensor.scalar_moment)
 print(f"mt scale: {fm.moment_tensor.scalar_moment} Nm,  scale fac: {amp_scale_fac}")
 
 
-searchnetcode = "II"
-searchstacode = "TAU"
-
 # find station to calculate distance
 sta_client = Client("IRIS")
 inventory = sta_client.get_stations(network=searchnetcode, station=searchstacode,
                                 level="station",
                                 starttime=start,
-                                endtime=start+10*60)
-
+                                endtime=start+twindow)
+if len(inventory) == 0 or len(inventory[0].stations) == 0:
+    raise Error("unable to find station")
 network = inventory[0]
 station = network.stations[0]
 
+if len(inventory) > 1 or len(inventory[0].stations) > 1:
+    print(f"Found more than one net/station, using first: {network.code}.{station.code}")
+
+# calc distance from origin to station
 daz = distaz.DistAz(origin.latitude, origin.longitude, station.latitude, station.longitude)
 
+# go get channels with response
 inventory = sta_client.get_stations(network=network.code, station=station.code,
                                 location="00", channel="LH?,BH?,HH?",
                                 level="response",
                                 starttime=start,
-                                endtime=start+10*60)
+                                endtime=start+twindow)
+inventory.write(os.path.join(runName, f"{network.code}.{station.code}.staxml"), format="STATIONXML")
 channels = inventory[0].stations[0].channels
 
 # find LHZ channel to get sample rate
@@ -107,6 +136,7 @@ if lhz_channel is None:
 if serveSeis is not None:
     serveSeis.inventory=inventory
 
+# calc travel times to estimate model depth and slowness values
 taumodel = TauPyModel(model="prem" )
 radiusOfEarth = 6371 # for flat to spherical ray param conversion, should get from model
 
@@ -131,14 +161,23 @@ for a in arrivals:
 maxDepth = round(math.ceil(maxDepth + 10)) # little bit deeper
 minRayParam = minRayParam/radiusOfEarth # need to be flat earth ray params
 maxRayParam = maxRayParam/radiusOfEarth
+
+# might be useful to get wider range of slownesses
+minRayParam = 0
+# maxRayParam =
 print(f"ray param: min {minRayParam}  max {maxRayParam}")
+
 
 # base model, prem down to 80 km
 model = earthmodel.EarthModel.loadPrem(maxDepth)
-model.gradientthick = 25 # probably too big
-model.eftthick = 50 # probably too big
-model.moment_tensor = fm.moment_tensor
-model.sourceDepths = [ origin.depth/1000 ] # in km
+model.name = runName # optional but useful to set a name
+# for the earthquake near Australia set above, and II.TAS, an ocean crust is
+# more appropriate. This uses the crust2.0 average oceanic crust just because
+model.layers = velocitymodel.modifyCrustToOceanic(model.layers)
+model.gradientthick = 25 # probably too big, but quick to run
+model.eftthick = 50 # probably too big, but quick to run
+model.moment_tensor = fm.moment_tensor # use moment tensor from earthquake
+model.sourceDepths = [ origin.depth/1000 ] # set source depth in km, quakeml uses m
 model.distance = {
     "type": earthmodel.DIST_SINGLE,
     "distance": daz.getDistanceKm(),
@@ -158,11 +197,14 @@ model.frequency['numtimepoints'] = 1024
 model.frequency['nyquist'] = lhz_channel.sample_rate/2.0
 model.frequency['max'] = lhz_channel.sample_rate/2.0
 
-# change to get all ray param
+# change to get all ray param, might also change highpass, highcut
 model.slowness['lowcut'] = 0
 model.slowness['lowpass'] = 0
 
+# model can be printed, but lots of lines of output
 #print(model)
+# or can save output as json for easier editing
+# model.writeToJsonFile("model.json")
 
 bandcode = "L"
 gaincode = "H"
@@ -191,7 +233,7 @@ for c in inventory[0].stations[0].channels:
 for c in station.channels:
     print(f"sta channel: {c}")
 
-inventory.write("example.staml", format="stationxml")
+inventory.write(os.path.join(runName, f"{network.code}.{station.code}_synth.staxml"), format="STATIONXML")
 
 outfilebase = "test"
 if model.name and len(model.name) > 0:
@@ -199,16 +241,13 @@ if model.name and len(model.name) > 0:
 sphFilename = f"{outfilebase}.ger"
 flatFilename = f"{outfilebase}_eft.ger"
 
-# unflattened model (spherical)
-model.writeToFile(sphFilename)
-# flattened model
-model.eft().writeToFile(flatFilename)
+# as json
+model.writeToJsonFile(os.path.join(runName, f"{outfilebase}.json"))
 
-# plot beachball with obspy
-#from obspy.imaging.beachball import beachball
-mtArray = momenttensor.to_beachballarray(fm.moment_tensor.tensor)
-print(", ".join(str(x) for x in mtArray))
-#fig = beachball(mtArray)
+# unflattened model (spherical)
+model.writeToFile(os.path.join(runName, sphFilename))
+# flattened model
+model.eft().writeToFile(os.path.join(runName, flatFilename))
 
 #input("return to quit")
 
@@ -226,24 +265,25 @@ waveforms = sta_client.get_waveforms(network=network.code, station=station.code,
                                 starttime=starttime,
                                 endtime=starttime+timewidth)
 for tr in waveforms:
-    tr.write(f"{tr.id}.sac", format='SAC')
+    tr.write(os.path.join(runName, f"{tr.id}.sac"), format='SAC')
 waveforms.attach_response(inventory)
 
 if serveSeis is not None:
     serveSeis.stream = waveforms
 
 async def mgenkennett(model):
-    mgenkennett = '../RandallReflectivity/mgenkennett'
+    mgenkennett = '../../RandallReflectivity/mgenkennett'
     await runCode(mgenkennett, model)
 
 
 async def runCode(code, model):
     modelFilename = "model_mgen_eft.ger"
-    model.eft().writeToFile(modelFilename)
+    model.eft().writeToFile(os.path.join(runName, modelFilename))
     proc = await asyncio.create_subprocess_shell(
         f"{code} {modelFilename}",
         stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE)
+        stderr=asyncio.subprocess.PIPE,
+        cwd=runName)
 
     stdout, stderr = await proc.communicate()
 
@@ -256,7 +296,7 @@ async def runCode(code, model):
 
 async def runAndPlot(model):
     await mgenkennett(model)
-    synthresults = specfile.readSpecFile('mspec', reduceVel=reduceVel, offset=offset)
+    synthresults = specfile.readSpecFile(os.path.join(runName, 'mspec'), reduceVel=reduceVel, offset=offset)
     synthwaveforms = None
     for tsObj in synthresults['timeseries']:
         distStr = f"D{tsObj['distance']}"[:5].replace('.','_').strip('_')
@@ -294,7 +334,7 @@ async def runAndPlot(model):
     print(f"max: {synthwaveforms.max()}   {waveforms.max()}")
 
     for tr in synthwaveforms:
-        tr.write(f"{tr.id}.sac", format='SAC')
+        tr.write(os.path.join(runName, f"{tr.id}.sac"), format='SAC')
 
     both = synthwaveforms+waveforms
     if serveSeis is not None:
