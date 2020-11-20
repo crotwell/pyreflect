@@ -107,3 +107,26 @@ def layersFromPrem(maxdepth):
         else:
             layers.append(layer)
             depth = botDepth
+
+def modifyCrustToOceanic(layers):
+    """
+    modify crust to be more ocean-like
+    see https://igppweb.ucsd.edu/~gabi/crust/crust2-averages.txt
+    but simplify here to only be 2 layers
+    """
+    crustLayer1 = layers[0]
+    crustLayer2 = layers[1]
+    mantleLayer = layers[2]
+    if crustLayer1['thick'] != 15.0 and crustLayer2['thick'] != 9.4 and mantleLayer['vp'] != 8.11061:
+        raise Error(f"layers do not look like PREM, previously modified? thickness: {crustLayer1['thick']} {crustLayer2['thick']}")
+    origCrustThick = crustLayer1['thick'] + crustLayer2['thick']
+    layers[0]['thick'] = 6.96
+    layers[0]['vp'] = 6.6
+    layers[0]['vs'] = 3.65
+    layers[0]['rho'] = 2.90
+    layers[1]['thick'] = 12.91-6.96
+    layers[1]['vp'] = 7.11
+    layers[1]['vs'] = 3.91
+    layers[1]['rho'] = 3.05
+    layers[2]['thick'] = layers[2]['thick'] + origCrustThick - layers[0]['thick'] - layers[1]['thick']
+    return layers
