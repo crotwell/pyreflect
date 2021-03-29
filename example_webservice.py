@@ -260,8 +260,9 @@ starttime = origin.time + daz.getDistanceKm() / reduceVel + offset
 timewidth = model.frequency['numtimepoints'] / (2*model.frequency['nyquist'])
 
 # save waveforms locally
+print(f" as for waveforms for {network.code}.{station.code}.00.LH?,BH?,HH? {starttime} to {starttime+timewidth}")
 waveforms = sta_client.get_waveforms(network=network.code, station=station.code,
-                                location="00", channel="LH?,BH?,HH?",
+                                location="00", channel="LHZ",
                                 starttime=starttime,
                                 endtime=starttime+timewidth)
 for tr in waveforms:
