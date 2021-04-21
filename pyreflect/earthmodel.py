@@ -255,8 +255,8 @@ class EarthModel:
         out += f"{len(self.sourceDepths)}\n"
         out += f"{' '.join(map(str, self.sourceDepths))}\n"
         out += f"{self.receiverDepth}\n"
-        if self.momentTensor:
-            out += f"{self.momentTensor['m_nn']} {self.momentTensor['m_ne']} {self.momentTensor['m_nd']} {self.momentTensor['m_ee']} {self.momentTensor['m_ed']} {self.momentTensor['m_dd']}\n"
+        if self._momentTensor:
+            out += f"{self._momentTensor['m_nn']} {self._momentTensor['m_ne']} {self._momentTensor['m_nd']} {self._momentTensor['m_ee']} {self._momentTensor['m_ed']} {self._momentTensor['m_dd']}\n"
         return out
     def clone(self):
         out = EarthModel()
