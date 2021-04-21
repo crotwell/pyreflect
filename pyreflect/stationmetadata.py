@@ -149,7 +149,7 @@ def createFakeMetadata(model, loccode, bandcode, gaincode, scalar_moment_N_m, am
           "start": "1900-01-01T00:00:00",
           "lat": 0.0,
           "lon": deg,
-          "sitename": f"fake {d} deg",
+          "sitename": f"fake {deg} deg",
           "radialaz": model.distance['azimuth'],
           "transverseaz": (model.distance['azimuth']+90) % 360,
           "gain": 1/moment_scale_factor(scalar_moment_N_m),
