@@ -137,8 +137,8 @@ def createFakeMetadata(model, loccode, bandcode, gaincode, scalar_moment_N_m, am
         distList = model.distance['distanceList']
     fakeXml = None
     for d in distList:
-        deg = str(round(d/111.19, 2)).replace('.','_')
-        station_code = deg
+        deg = d/111.19
+        station_code = str(round(deg, 2)).replace('.','_')
         data = {
           "netcode": network_code,
           "stacode": station_code,
@@ -148,7 +148,7 @@ def createFakeMetadata(model, loccode, bandcode, gaincode, scalar_moment_N_m, am
           "now": datetime.utcnow(),
           "start": "1900-01-01T00:00:00",
           "lat": 0.0,
-          "lon": d,
+          "lon": deg,
           "sitename": f"fake {d} deg",
           "radialaz": model.distance['azimuth'],
           "transverseaz": (model.distance['azimuth']+90) % 360,

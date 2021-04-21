@@ -7,11 +7,10 @@ model = earthmodel.EarthModel.loadPrem(585)
 model.distance = {
     "type": earthmodel.DIST_REGULAR,
     "min": 45*111.19,
-    "delta": 5*119.19,
+    "delta": 5*111.19,
     "num": 5,
     "azimuth": 45
 }
-
 loccode="SY"
 bandcode = "L"
 gaincode = "H"
