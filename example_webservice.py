@@ -176,7 +176,7 @@ model.name = runName # optional but useful to set a name
 model.layers = velocitymodel.modifyCrustToOceanic(model.layers)
 model.gradientthick = 25 # probably too big, but quick to run
 model.eftthick = 50 # probably too big, but quick to run
-model.moment_tensor = fm.moment_tensor # use moment tensor from earthquake
+model.momentTensor = fm.moment_tensor # use moment tensor from earthquake
 model.sourceDepths = [ origin.depth/1000 ] # set source depth in km, quakeml uses m
 model.distance = {
     "type": earthmodel.DIST_SINGLE,
