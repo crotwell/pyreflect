@@ -86,8 +86,8 @@ def readSpecFile(filename, reduceVel = 8, offset = -10, ampStyle=AMP_STYLE_VEL, 
         dt = 1. / ( 2 * freq['nyquist'] )
         ifmin = round(freq['min'] / freq['delta'])
         ifmax = round(freq['max'] / freq['delta'])
+        ifmax = ifmin+inputs['frequency']['nffpts']-1
         nfppts = ifmax - ifmin + 1
-
         nft =  2 * ( freq['nfpts'] - 1 )
         for r in range(inputs['numranges']):
             distance = inputs['ranges'][r]
@@ -96,11 +96,11 @@ def readSpecFile(filename, reduceVel = 8, offset = -10, ampStyle=AMP_STYLE_VEL, 
             for d in range(inputs['numdepths']):
                 depth = inputs['depths'][d]
                 for s in range(inputs['numsources']):
-                    u0 = numpy.zeros(nfppts, dtype=complex)
-                    w0 = numpy.zeros(nfppts, dtype=complex)
-                    tn = numpy.zeros(nfppts, dtype=complex)
+                    u0 = numpy.zeros(freq['nfpts'], dtype=complex)
+                    w0 = numpy.zeros(freq['nfpts'], dtype=complex)
+                    tn = numpy.zeros(freq['nfpts'], dtype=complex)
 
-                    for fnum in range(ifmin, ifmax+1):
+                    for fnum in range(ifmin, ifmax):
                         startrecord = f.read(4) # fortran starting dummy 4 bytes
                         data = f.read(4*2*3)
                         endrecord = f.read(4) # fortran endinging dummy 4 bytes
@@ -109,16 +109,16 @@ def readSpecFile(filename, reduceVel = 8, offset = -10, ampStyle=AMP_STYLE_VEL, 
                         w0[fnum] = complex(w_real,  w_imag)
                         tn[fnum]  = complex(t_real,  t_imag)
 
-                    u0raw = u0.copy()
+                    results['inputs']['u0raw'] = u0.copy()
 
                     reduceShift = timeReduce * 2*math.pi*freq['delta']
-                    f=freq['min']
+                    
 
-                    for i in range(freq['nfpts']):
+                    for fnum in range(ifmin, ifmax):
                         # apply reducing vel
-                        u0[i] = u0[i] * cmath.exp( complex(0., (i)*reduceShift) )
-                        w0[i] = w0[i] * cmath.exp( complex(0., (i)*reduceShift) )
-                        tn[i] = tn[i] * cmath.exp( complex(0., (i)*reduceShift) )
+                        u0[fnum] = u0[fnum] * cmath.exp( complex(0., (fnum)*reduceShift) )
+                        w0[fnum] = w0[fnum] * cmath.exp( complex(0., (fnum)*reduceShift) )
+                        tn[fnum] = tn[fnum] * cmath.exp( complex(0., (fnum)*reduceShift) )
 
 # Displacement Spectrum has a factor of omeaga**2 from integration of k*dk
 #   the Kennett integration is over slowenss p*dp and leaves
