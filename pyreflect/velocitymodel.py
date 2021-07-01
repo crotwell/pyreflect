@@ -1,8 +1,8 @@
 import pkgutil
 import math
 
-def __load_prem__():
-    premnd = pkgutil.get_data(__name__, "data/prem.nd").decode('ascii')
+def __load_model_nd__(modelname="prem"):
+    premnd = pkgutil.get_data(__name__, f"data/{modelname}.nd").decode('ascii')
     layers = []
     prevDepth = 0
     firstLine = True
@@ -85,8 +85,14 @@ def cloneLayer(layer):
         "ts2": layer['ts2']
     }
 
+def layersFromAk135f(maxdepth):
+    return layersFromModel('ak135fcont', maxdepth)
+
 def layersFromPrem(maxdepth):
-    premLayers = __load_prem__()
+    return layersFromModel('prem', maxdepth)
+
+def layersFromModel(modelname, maxdepth):
+    premLayers = __load_model_nd__(modelname)
     depth = 0
     layers = []
     for layer in premLayers:

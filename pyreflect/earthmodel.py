@@ -5,7 +5,7 @@ import os
 from .gradient import apply_gradient
 from .earthflatten import apply_eft
 from .momenttensor import rtp_to_ned
-from .velocitymodel import layersFromPrem, createLayer, cloneLayer
+from .velocitymodel import layersFromAk135f, layersFromPrem, createLayer, cloneLayer
 
 DIST_SINGLE=1
 DIST_REGULAR=0
@@ -70,6 +70,13 @@ class EarthModel:
         premLayers = layersFromPrem(maxdepth)
         model.layers = premLayers
         model.name = f"prem to {maxdepth}"
+        return model
+
+    @staticmethod
+    def loadAk135f(maxdepth ):
+        model = EarthModel()
+        model.layers = layersFromAk135f(maxdepth)
+        model.name = f"ak135f to {maxdepth}"
         return model
 
     @staticmethod
@@ -203,6 +210,7 @@ class EarthModel:
 
     def asDict(self):
         return {
+            "name": self.name,
             "gradientthick": self.gradientthick,
             "eftthick": self.eftthick,
             "isEFT": self.isEFT,
@@ -217,6 +225,7 @@ class EarthModel:
     @staticmethod
     def fromDict(data):
         model = EarthModel()
+        if "name" in data: model.name = data["name"]
         if "gradientthick" in data: model.gradientthick = data["gradientthick"]
         if "eftthick" in data: model.eftthick = data["eftthick"]
         if "layers" in data: model.layers = data["layers"]
