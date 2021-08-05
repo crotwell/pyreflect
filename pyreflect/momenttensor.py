@@ -1,3 +1,4 @@
+import math
 
 def moment_scale_factor(scalar_moment_N_m):
     """
@@ -27,14 +28,17 @@ Goal is to return scale factor to take moment and seismogram to m/s amp units
     scale_fac = scalar_moment_N_m * dyne_cm_per_newton_meter / randall_unit_scale / cm_per_m
     return scale_fac
 
-def mw_scale_factor(Mw):
+def mw_to_N_m(Mw):
     """
     Mw to Mo conversion from Lay and Wallace p. 384, I assumed that Mo is in
     newton meters hence multiply by 10^7 to change to dyne cm
     (1 Newton = 10^5 dynes and 1 m = 10^2 cm)
     """
     scalar_moment_N_m = math.pow(10,(Mw+10.73)*1.5-7.0)
-    raise Error("no imple yet")
+    return scalar_moment_N_m
+
+def mw_scale_factor(Mw):
+    return moment_scale_factor(mw_to_N_m(Mw))
 
 def rtp_to_ned(rtp_momenttensor):
     """Convert a r, theta, phi moment tensor into north, east, down
@@ -47,13 +51,14 @@ def rtp_to_ned(rtp_momenttensor):
     switch sign when reversed.
     """
     mt = rtp_momenttensor
+
     return {
-        "m_dd": mt.m_rr,
-        "m_nn": mt.m_tt,
-        "m_ee": mt.m_pp,
-        "m_nd": mt.m_rt,
-        "m_ed": -1*mt.m_rp,
-        "m_ne": -1*mt.m_tp
+        "m_dd": mt["m_rr"],
+        "m_nn": mt["m_tt"],
+        "m_ee": mt["m_pp"],
+        "m_nd": mt["m_rt"],
+        "m_ed": -1*mt["m_rp"],
+        "m_ne": -1*mt["m_tp"]
     }
 
 
@@ -72,12 +77,12 @@ def ned_to_rtp(ned_momenttensor):
     """
     mt = rtp_momenttensor
     return {
-        "m_rr": mt.m_dd,
-        "m_tt": mt.m_nn,
-        "m_pp": mt.m_ee,
-        "m_rt": mt.m_nd,
-        "m_rp": -1*mt.m_ed,
-        "m_tp": -1*mt.m_ne
+        "m_rr": mt["m_dd"],
+        "m_tt": mt["m_nn"],
+        "m_pp": mt["m_ee"],
+        "m_rt": mt["m_nd"],
+        "m_rp": -1*mt["m_ed"],
+        "m_tp": -1*mt["m_ne"]
     }
 
 def to_beachballarray(momenttensor):
