@@ -100,7 +100,7 @@ def readSpecFile(filename, reduceVel = 8, offset = -10, ampStyle=AMP_STYLE_VEL, 
                     w0 = numpy.zeros(freq['nfpts'], dtype=complex)
                     tn = numpy.zeros(freq['nfpts'], dtype=complex)
 
-                    for fnum in range(ifmin, ifmax):
+                    for fnum in range(ifmin, ifmax+1):
                         startrecord = f.read(4) # fortran starting dummy 4 bytes
                         data = f.read(4*2*3)
                         endrecord = f.read(4) # fortran endinging dummy 4 bytes
@@ -110,9 +110,11 @@ def readSpecFile(filename, reduceVel = 8, offset = -10, ampStyle=AMP_STYLE_VEL, 
                         tn[fnum]  = complex(t_real,  t_imag)
 
                     results['inputs']['u0raw'] = u0.copy()
+                    results['inputs']['w0raw'] = w0.copy()
+                    results['inputs']['tnraw'] = tn.copy()
 
                     reduceShift = timeReduce * 2*math.pi*freq['delta']
-                    
+
 
                     for fnum in range(ifmin, ifmax):
                         # apply reducing vel
@@ -151,14 +153,14 @@ def readSpecFile(filename, reduceVel = 8, offset = -10, ampStyle=AMP_STYLE_VEL, 
                         tn[i] = ws * tn[i]
 
                     u0_td = numpy.fft.irfft(u0, nft)
-                    w0_td = numpy.fft.irfft(w0)
-                    tn_td = numpy.fft.irfft(tn)
+                    w0_td = numpy.fft.irfft(w0, nft)
+                    tn_td = numpy.fft.irfft(tn, nft)
 
                     #scaleFac = 1 /(nft * dt * 4 * math.pi)
                     scaleFac = -1 /( dt * 4 * math.pi) # nft taken care of in fft
                     u0_td = u0_td * scaleFac
-                    w0_td = u0_td * scaleFac
-                    tn_td = u0_td * scaleFac
+                    w0_td = w0_td * scaleFac
+                    tn_td = tn_td * scaleFac
 
                     mech = "mij"
                     greens = {}
