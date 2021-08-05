@@ -82,7 +82,7 @@ for cmp_idx in range(3):
 
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
-    ax.set_title(f"Amp FFT BH{cmp_names[cmp_idx]}")
+    ax.set_title(f"Amp FFT BH{cmp_names[cmp_idx].upper()}")
     ax.plot(ampS, "r-", label="pyref")
     ax.plot(ampT, "b-", label="tsynth")
     plt.legend(loc='lower right')
@@ -92,7 +92,7 @@ for cmp_idx in range(3):
 
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
-    ax.set_title(f"BH{cmp_names[cmp_idx]}")
+    ax.set_title(f"BH{cmp_names[cmp_idx].upper()}")
     ax.plot(stream[cmp_idx].times("matplotlib"), stream[cmp_idx].data, "r-", label="pyref")
     ax.plot(tsynth[cmp_idx].times("matplotlib"), tsynth[cmp_idx].data, "b-", label="tsynth")
     ax.xaxis_date()
