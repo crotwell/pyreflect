@@ -116,7 +116,7 @@ def readSpecFile(filename, reduceVel = 8, offset = -10, ampStyle=AMP_STYLE_VEL, 
                     reduceShift = timeReduce * 2*math.pi*freq['delta']
 
 
-                    for fnum in range(ifmin, ifmax):
+                    for fnum in range(ifmin, ifmax+1):
                         # apply reducing vel
                         u0[fnum] = u0[fnum] * cmath.exp( complex(0., (fnum)*reduceShift) )
                         w0[fnum] = w0[fnum] * cmath.exp( complex(0., (fnum)*reduceShift) )
