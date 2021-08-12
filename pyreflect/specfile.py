@@ -24,7 +24,7 @@ MECH_NAMES = {
 }
 
 
-def readSpecFile(filename, reduceVel = 8, offset = -10, ampStyle=AMP_STYLE_VEL, sourceStyle=SOURCE_STYLE_STEP):
+def readSpecFile(filename, reduceVel = 8.0, offset = -10.0, ampStyle=AMP_STYLE_VEL, sourceStyle=SOURCE_STYLE_STEP):
     """ Read mspec file generate by mgenkennett or mikjennett
 
     Output from original Fortran MasterSrcKennett.F:
@@ -85,7 +85,6 @@ def readSpecFile(filename, reduceVel = 8, offset = -10, ampStyle=AMP_STYLE_VEL, 
         freq = inputs['frequency']
         dt = 1. / ( 2 * freq['nyquist'] )
         ifmin = round(freq['min'] / freq['delta'])
-        ifmax = round(freq['max'] / freq['delta'])
         ifmax = ifmin+inputs['frequency']['nffpts']-1
         nfppts = ifmax - ifmin + 1
         nft =  2 * ( freq['nfpts'] - 1 )
@@ -109,12 +108,11 @@ def readSpecFile(filename, reduceVel = 8, offset = -10, ampStyle=AMP_STYLE_VEL, 
                         w0[fnum] = complex(w_real,  w_imag)
                         tn[fnum]  = complex(t_real,  t_imag)
 
-                    results['inputs']['u0raw'] = u0.copy()
-                    results['inputs']['w0raw'] = w0.copy()
-                    results['inputs']['tnraw'] = tn.copy()
+                    u0_raw = u0.copy()
+                    w0_raw = w0.copy()
+                    tn_raw = tn.copy()
 
                     reduceShift = timeReduce * 2*math.pi*freq['delta']
-
 
                     for fnum in range(ifmin, ifmax+1):
                         # apply reducing vel
@@ -148,6 +146,7 @@ def readSpecFile(filename, reduceVel = 8, offset = -10, ampStyle=AMP_STYLE_VEL, 
                       	    wsf = -1j *fr*2 * math.pi*fr*2 * math.pi
                         else:
                             raise Error(f"Dont understand amp/source style: {ampStyle} {sourceStyle}")
+
                         u0[i] = ws * u0[i]
                         w0[i] = ws * w0[i]
                         tn[i] = ws * tn[i]
@@ -166,13 +165,18 @@ def readSpecFile(filename, reduceVel = 8, offset = -10, ampStyle=AMP_STYLE_VEL, 
                     greens = {}
                     if (inputs['numsources'] > 1):
                         mech = MECH_NAMES.get(s, "invalid source mech, not 0-5")
-
-                    results['timeseries'].append({
+                    timeseries = {
                       "timeReduce": timeReduce,
                       "distance": distance,
                       "depth": depth,
                       "z": u0_td, # z down in GER style synthetics
                       "r": w0_td,
-                      "t": tn_td
-                    })
+                      "t": tn_td,
+                      "raw": {
+                        "u0": u0_raw,
+                        "w0": w0_raw,
+                        "tn": tn_raw
+                      }
+                    };
+                    results['timeseries'].append(timeseries)
     return results
