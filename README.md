@@ -15,3 +15,14 @@ print(gradmod.asGER())
 eftmod = gradmod.eft(5)
 print(eftmod.asGER())
 ```
+
+# Build
+
+See https://packaging.python.org/tutorials/packaging-projects/#creating-the-package-files
+
+```
+python3 -m pip install --upgrade build
+python3 -m build
+pip install dist/pyreflect-0.0.2-py3-none-any.whl --force-reinstall
+```
+
