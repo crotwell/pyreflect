@@ -5,23 +5,27 @@ import asyncio
 import math
 import os
 import pprint
+
+# we assume obspy, which includes numpy
 import numpy
 from io import StringIO, BytesIO
 
-# libcomcat mostly uses same dependencies as obspy, but also needs pyproj
-
+import obspy
 from obspy.clients.fdsn import Client
 from obspy.imaging.beachball import MomentTensor, beachball
 from obspy.taup import TauPyModel
-import obspy
-import libcomcat
-from libcomcat.dataframes import find_nearby_events
-from libcomcat.classes import DetailEvent
-from libcomcat.search import search
 from obspy.io.quakeml.core import Unpickler
 from obspy import read
 from obspy.core.trace import Stats
 from obspy.core.utcdatetime import UTCDateTime
+
+# libcomcat mostly uses same dependencies as obspy, but also needs pyproj
+# get with: conda install libcomcat
+import libcomcat
+from libcomcat.dataframes import find_nearby_events
+from libcomcat.classes import DetailEvent
+from libcomcat.search import search
+
 
 # name the run, this will create a directory to output lots of files
 runName = "tasmania_prem"
