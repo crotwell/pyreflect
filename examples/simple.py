@@ -23,11 +23,32 @@ offset=-30
 # good idea to have P in phase list to set reduceVel value
 phaseList = ["P", "S", "SSvmp", "SPvmp", "SSvms"]
 runName = 'simple'
+max_freq = 1.0
+numPts = 4096
+
+
+# might be good to scale moment tensor
+# assume moment tensor is in newton-meters,
+# momenttensor.moment_scale_factor() will convert to
+# correct value for GER reflectivity, unity scaled
+# to 10**20 dyne-cm
+momtensorvals = {
+    'm_dd': momenttensor.moment_scale_factor(-0.136e+26),
+    'm_nn': momenttensor.moment_scale_factor(-0.073e+26),
+    'm_ee': momenttensor.moment_scale_factor(0.209e+26),
+    'm_nd': momenttensor.moment_scale_factor(0.074e+26),
+    'm_ed': momenttensor.moment_scale_factor(-1.262e+26),
+    'm_ne': momenttensor.moment_scale_factor(-0.310e+26)
+    }
+base_model = "ak135"
+#
+# End inputs
+#
 if not os.path.isdir(runName):
     os.mkdir(runName)
 
 # calc travel times to estimate model depth and slowness values
-taumodel = TauPyModel(model="ak135" )
+taumodel = TauPyModel(model=base_model )
 radiusOfEarth = 6371 # for flat to spherical ray param conversion, should get from model
 
 arrivals = taumodel.get_pierce_points(source_depth_in_km=origin_depth/1000,
@@ -55,12 +76,17 @@ maxRayParam = maxRayParam/radiusOfEarth
 # calc red velocity of earliest arrival (P wave usually)
 reduceVel = distaz.DistAz.degreesToKilometers(distDeg) / earliestArrival.time
 
-# load model file for PREM down to 85 km depth
 
-model = earthmodel.EarthModel.loadAk135f(maxDepth)
+# load model file down to maxDepth km depth
+
+if base_model == "ak135":
+    model = earthmodel.EarthModel.loadAk135f(maxDepth)
+elif base_model == "prem":
+    model = earthmodel.EarthModel.loadPrem(maxDepth)
+else:
+    raise Exception(f"unknown base mode: {base_model}")
 model.name = runName
-momtensorvals = {'m_dd': -0.136e+26, 'm_nn': -0.073e+26, 'm_ee': 0.209e+26, 'm_nd': 0.074e+26,
-                           'm_ed': -1.262e+26, 'm_ne': -0.310e+26}
+
 model.momentTensor = momtensorvals
 model.distance = {
             "type": earthmodel.DIST_SINGLE,
@@ -69,9 +95,9 @@ model.distance = {
         }
 model.frequency = {
             "min": 0.0,
-            "max": 1.0,
-            "nyquist":1.0,
-            "numtimepoints": 4096
+            "max": max_freq,
+            "nyquist":max_freq,
+            "numtimepoints": numPts
         }
 model.slowness = {
     "lowcut": minRayParam/2,
@@ -87,6 +113,8 @@ model.writeToJsonFile(os.path.join(runName, "model.json"))
 model.writeToFile(os.path.join(runName, "simplemodel.ger"))
 model.eft().writeToFile(os.path.join(runName, "simplemodel_eft.ger"))
 
+# runs mgenkennett, note this uses reflectivityPath above to find it
+# this is bad, should fix it...
 async def mgenkennett(model):
     mgenkennett = f'{reflectivityPath}/mgenkennett'
     return await runCode(mgenkennett, model)
@@ -112,6 +140,8 @@ async def runCode(code, model):
         print(f'Warning, {code} did not exit successfully')
     return proc.returncode
 
+# pyreflect can process mspec files natively, so this is only if you want to
+# test vs the original fortran spec2zrt
 async def runSpec2zrt(reduceVel, offset):
     code = f'{reflectivityPath}/spec2zrt'
     proc = await asyncio.create_subprocess_shell(
@@ -131,12 +161,15 @@ async def runSpec2zrt(reduceVel, offset):
         print(f'Warning, {code} did not exit successfully')
     return proc.returncode
 
+# run the synthetic
 retVal = asyncio.run(mgenkennett(model))
+
+# if all ok, process the mspec file into sac files
 if retVal == 0:
     #asyncio.run(runSpec2zrt(reduceVel, offset))
     results = specfile.readSpecFile(os.path.join(runName, "mspec"),reduceVel = reduceVel, offset = offset)
     for tsObj in results['timeseries']:
-        distStr = f"D{tsObj['distance']}"[:5].replace('.','_').strip('_')
+        distStr = f"D{tsObj['distance']}"[:6].replace('.','_').strip('_')
         tsObj['depth'] = round(tsObj['depth'], 5);
         commonHeader = {
             'sampling_rate': results['inputs']['frequency']['nyquist']*2.0,
@@ -170,4 +203,4 @@ if retVal == 0:
         t = obspy.Trace(tsObj['t'], header)
         t.write(os.path.join(runName, f"{header.component}_{distStr}_{tsObj['depth']}.sac"), format="SAC")
 
-print("I'm done.")
+print(f"{runName}, I'm done.")
