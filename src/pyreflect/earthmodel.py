@@ -10,6 +10,7 @@ from .velocitymodel import layersFromAk135f, layersFromPrem, createLayer, cloneL
 DIST_SINGLE=1
 DIST_REGULAR=0
 DIST_IRREGULAR=-1
+DEFAULT_MODEL_NAME = "default"
 
 class EarthModel:
     def __init__(self):
@@ -84,7 +85,8 @@ class EarthModel:
         with open(filename, "r") as f:
             jsonModel = json.load(f)
             model = EarthModel.fromDict(jsonModel)
-            model.name = os.path.basename(filename)
+            if model.name == DEFAULT_MODEL_NAME:
+                model.name = os.path.basename(filename)
             return model
     def writeToJsonFile(self, filename):
         with open(filename, "w") as f:
@@ -269,6 +271,7 @@ class EarthModel:
         return out
     def clone(self):
         out = EarthModel()
+        out.name = self.name+"Clone"
         out.gradientthick = self.gradientthick
         out.eftthick = self.eftthick
         out.isEFT = self.isEFT
