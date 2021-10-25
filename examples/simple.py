@@ -13,11 +13,11 @@ from obspy.core.utcdatetime import UTCDateTime
 
 from pyreflect import earthmodel, distaz, momenttensor, specfile
 
-# path to mgenkennett, relative to simple subdir (add extra ../ )
-reflectivityPath = '../../../RandallReflectivity'
+# path to mgenkennett, relative to simple subdir (may need to add extra ../ )
+reflectivityPath = '~/dev/Reflectivity/RandallReflectivity'
 distDeg = 45
 azimuth = 45
-origin_depth = 0
+origin_depth_km = 0
 reduceVel=8.0  # set below based on earliest arrival
 offset=-30
 # good idea to have P in phase list to set reduceVel value
@@ -51,7 +51,7 @@ if not os.path.isdir(runName):
 taumodel = TauPyModel(model=base_model )
 radiusOfEarth = 6371 # for flat to spherical ray param conversion, should get from model
 
-arrivals = taumodel.get_pierce_points(source_depth_in_km=origin_depth/1000,
+arrivals = taumodel.get_pierce_points(source_depth_in_km=origin_depth_km,
                                   distance_in_degree=distDeg,
                                   phase_list=phaseList)
 maxDepth = 0
@@ -86,7 +86,7 @@ elif base_model == "prem":
 else:
     raise Exception(f"unknown base mode: {base_model}")
 model.name = runName
-
+model.sourceDepths = [origin_depth_km]
 model.momentTensor = momtensorvals
 model.distance = {
             "type": earthmodel.DIST_SINGLE,
@@ -183,6 +183,9 @@ if retVal == 0:
                 }
             }
         # add arrival times and phase name as flags in SAC header
+        arrivals = taumodel.get_pierce_points(source_depth_in_km=tsObj['depth'],
+                                              distance_in_degree=tsObj['distance'],
+                                              phase_list=phaseList)
         for idx, a in enumerate(arrivals):
             commonHeader['sac'][f"t{idx}"] = a.time
             commonHeader['sac'][f"kt{idx}"] = a.name
