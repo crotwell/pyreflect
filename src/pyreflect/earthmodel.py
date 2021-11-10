@@ -313,5 +313,24 @@ class EarthModel:
         out.isEFT = True
         out.layers = eftLayers
         return out
+    def list_distances(self):
+        return list_distances(self.distance)
+    def halfspace_depth(self):
+        t = 0
+        for l in self.layers:
+            t += l['thick']
+        return t
     def __str__(self):
         return pprint.pformat(self.asDict())
+
+def list_distances(dist_params):
+    out = []
+    if dist_params['type'] > 0:
+        out.append(dist_params['distance'])
+    elif dist_params['type'] == DIST_REGULAR:
+        for idx in range(dist_params['num']):
+            d = dist_params['min']+idx*dist_params['delta']
+            out.append(d)
+    else:
+        out = list(dist_params['distanceList'])
+    return out
