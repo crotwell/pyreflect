@@ -241,16 +241,16 @@ class EarthModel:
     def asJSON(self):
         return json.dumps(self.asDict(), indent=4)
     @staticmethod
-    def __format_line_as_GER__(items):
-        stringItems = [format(x, '.2f') for x in items]
+    def __format_line_as_GER__(items, precision='.4f'):
+        stringItems = [format(x, precision) for x in items]
         return " ".join(stringItems)+"\n"
 
-    def asGER(self):
+    def asGER(self, precision='.4f'):
         self.evalGradients()
         out = f"{len(self.layers)}\n"
         for l in self.layers:
             items = [ l['thick'], l['vp'], l['vs'], l['rho'], l['qp'], l['qs'], l['tp1'], l['tp2'], l['ts1'], l['ts2']]
-            out += self.__format_line_as_GER__(items)
+            out += self.__format_line_as_GER__(items, precision=precision)
 #            out += f"{format(l['thick'], '.2f')} {l['vp']} {l['vs']} {l['rho']} {l['qp']} {l['qs']} {l['tp1']} {l['tp2']} {l['ts1']} {l['ts2']}\n"
         out += f"{self.slowness['lowcut']} {self.slowness['lowpass']} {self.slowness['highpass']} {self.slowness['highcut']} {self.slowness['controlfac']} \n"
         out += f"{self.frequency['min']} {self.frequency['max']} {self.frequency['nyquist']} {self.frequency['numtimepoints']}\n"
@@ -271,7 +271,7 @@ class EarthModel:
         return out
     def clone(self):
         out = EarthModel()
-        out.name = self.name+"Clone"
+        out.name = self.name+" Clone"
         out.gradientthick = self.gradientthick
         out.eftthick = self.eftthick
         out.isEFT = self.isEFT
@@ -313,6 +313,22 @@ class EarthModel:
         out.isEFT = True
         out.layers = eftLayers
         return out
+    def vp_vs_depth(self):
+        depth = 0
+        vp_list = []
+        vs_list = []
+        depth_list = []
+        prev_layer = None
+        for l in self.layers:
+            if prev_layer is None or prev_layer['vp'] != layer['vp'] or prev_layer['vs'] != layer['vs']:
+                depth_list.append(depth)
+                vp_list.append(l['vp'])
+                vs_list.append(l['vs'])
+            depth += l['thick']
+            depth_list.append(depth)
+            vp_list.append(l['vp'])
+            vs_list.append(l['vs'])
+        return vp_list, vs_list, depth_list
     def list_distances(self):
         return list_distances(self.distance)
     def halfspace_depth(self):
