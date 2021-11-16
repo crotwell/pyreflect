@@ -3,7 +3,7 @@ import pprint
 import json
 import os
 from .gradient import apply_gradient
-from .earthflatten import apply_eft
+from .earthflatten import apply_eft_old, eft_layer
 from .momenttensor import rtp_to_ned
 from .velocitymodel import layersFromAk135f, layersFromPrem, createLayer, cloneLayer
 
@@ -304,15 +304,27 @@ class EarthModel:
         out = self.clone()
         out.layers = gradLayers
         return out
-    def eft(self):
+    def eft_old(self):
         if (self.isEFT):
             raise ValueError("Model has already been flattened")
         gradMod = self.evalGradients()
-        eftLayers = apply_eft(gradMod.layers, self.eftthick)
+        eftLayers = apply_eft_old(gradMod.layers, self.eftthick)
         out = self.clone()
+        out.name = self.name+" EFT (depth factor)"
         out.isEFT = True
         out.layers = eftLayers
         return out
+    def eft(self, vp_factor=0.05, vs_factor=0.05):
+        eft_layers = []
+        top_depth = 0
+        for l in self.layers:
+            eft_layers = eft_layers + eft_layer(l, top_depth, vp_factor=vp_factor, vs_factor = vs_factor)
+            top_depth += l["thick"]
+        eft_model = self.clone()
+        eft_model.name = self.name+" EFT (vp factor)"
+        eft_model.isEFT = True
+        eft_model.layers = eft_layers
+        return eft_model
     def vp_vs_depth(self):
         depth = 0
         vp_list = []
