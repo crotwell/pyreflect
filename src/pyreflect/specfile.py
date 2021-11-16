@@ -36,16 +36,19 @@ def readSpecFile(filename, reduceVel = 8.0, offset = -10.0, ampStyle=AMP_STYLE_V
 
     results = {}
     inputs = {}
-    with open(filename, "rb") as f:
-        results['timeseries'] = []
-        results['inputs'] = inputs
-        inputs['time'] = {
-            'reducevel': reduceVel,
-            'offset': offset
-            }
-        struct_fmt = '3fifi3if'
-        struct_len = struct.calcsize(struct_fmt)
+    results['timeseries'] = []
+    results['inputs'] = inputs
+    inputs['time'] = {
+        'reducevel': reduceVel,
+        'offset': offset,
+        'ampStyle': ampStyle,
+        'sourceStyle': sourceStyle
+        }
 
+    struct_fmt = '3fifi3if'
+    struct_len = struct.calcsize(struct_fmt)
+
+    with open(filename, "rb") as f:
         startrecord = f.read(4) # fortran starting dummy 4 bytes
         data = f.read(struct_len)
         if not data:
