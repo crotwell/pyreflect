@@ -1,16 +1,36 @@
 import pkgutil
 import math
+try:
+    import crustone
+    crustone_ok = True
+except ImportError:
+    # crustone not installed
+    crustone_ok = False
+
+def check_crustone_import_ok():
+    if not crustone_ok:
+        raise Exception("function requires crustone, but appears not to be installed, https://github.com/crotwell/crust-one")
+
+DEFAULT_QP = 1500
+DEFAULT_QS = 600
+__c1__ = None
 
 def __load_model_nd__(modelname="prem"):
-    premnd = pkgutil.get_data(__name__, f"data/{modelname}.nd").decode('ascii')
+    nd_data = pkgutil.get_data(__name__, f"data/{modelname}.nd")
+    if nd_data is None:
+        return None
+    return load_model_from_nd(nd_data.decode('ascii'))
+
+def load_model_from_nd(ndtext):
     layers = []
     prevDepth = 0
     firstLine = True
     layer = None
     prevLayer = None
-    for line in premnd.splitlines():
+    layerType = "crust"
+    for line in ndtext.splitlines():
         if line == "mantle" or line == "outer-core" or line == "inner-core":
-            pass
+            layerType = line
         else:
             depth,vp,vs,rho,qp,qs = line.split()
             depth = float(depth)
@@ -35,7 +55,8 @@ def __load_model_nd__(modelname="prem"):
                 "tp1": 1.0e4,
                 "tp2": 0.0001,
                 "ts1": 1.0e4,
-                "ts2": 0.0001
+                "ts2": 0.0001,
+                "type": layerType,
             }
             if firstLine:
                 firstLine = False
@@ -53,7 +74,7 @@ def layersFromEMC(modelname, maxdepth, lat=0, lon=0):
     with urllib.request.urlopen('http://python.org/') as response:
         respOut = response.read()
 
-def createLayer(thick, vp, vs, rho, qp=1000, qs=500, tp1=1.0e4, tp2=0.0001, ts1=1.0e4, ts2=0.0001):
+def createLayer(thick, vp, vs, rho, qp=DEFAULT_QP, qs=DEFAULT_QS, tp1=1.0e4, tp2=0.0001, ts1=1.0e4, ts2=0.0001, type="unknown"):
     return {
       "thick": thick,
       "vp": vp,
@@ -66,7 +87,8 @@ def createLayer(thick, vp, vs, rho, qp=1000, qs=500, tp1=1.0e4, tp2=0.0001, ts1=
       "tp1": tp1,
       "tp2": tp2,
       "ts1": ts1,
-      "ts2": ts2
+      "ts2": ts2,
+      "type": type
     }
 
 def cloneLayer(layer):
@@ -82,7 +104,8 @@ def cloneLayer(layer):
         "tp1": layer['tp1'],
         "tp2": layer['tp2'],
         "ts1": layer['ts1'],
-        "ts2": layer['ts2']
+        "ts2": layer['ts2'],
+        "type": layer['type'],
     }
 
 def layersFromAk135f(maxdepth):
@@ -93,6 +116,9 @@ def layersFromPrem(maxdepth):
 
 def layersFromModel(modelname, maxdepth):
     premLayers = __load_model_nd__(modelname)
+    if premLayers is None:
+        with open(modelname, 'r') as nd_file:
+            premLayers = nd_file.read()
     depth = 0
     layers = []
     for layer in premLayers:
@@ -113,6 +139,56 @@ def layersFromModel(modelname, maxdepth):
         else:
             layers.append(layer)
             depth = botDepth
+
+def load_crustone():
+    check_crustone_import_ok()
+    global __c1__
+    if __c1__ is None:
+        __c1__ = crustone.parse()
+    return __c1__
+
+def modify_crustone(layers, lat, lon):
+    check_crustone_import_ok()
+    num_crust_layers = 0
+    orig_crust_thick = 0
+    while layers[num_crust_layers]['type'] == 'crust':
+        orig_crust_thick += layers[num_crust_layers]["thick"]
+        num_crust_layers += 1
+    decapitate = layers[num_crust_layers:]
+
+    c1 = load_crustone()
+    profile = c1.find_profile(lat, lon)
+    crustone_thick = profile.crust_thick()
+    if crustone_thick > orig_crust_thick:
+        # shrink topmost mantle layer to accomodate
+        # note this takes into account elevation from crustone, effectively
+        # increasing the overall model thickness
+        # note profile.layers[0].topDepth is negative for high elevation
+        extra_thickness = crustone_thick - orig_crust_thick + profile.layers[0].topDepth
+        if decapitate[0]["thick"] > extra_thickness:
+            decapitate[0]["thick"] = decapitate[0]['thick'] - (extra_thickness)
+        else:
+            raise Exception(f"top mantle layer is not thick enough to subtract extra crust: orig: {orig_crust_thick} crustone: {crustone_thick}  top mantle: {decapitate[0]['thick']}")
+    else:
+        decapitate[0]["thick"] = orig_crust_thick - crustone_thick
+    merge_layers = []
+    for l in profile.layers:
+        if l.topDepth == l.botDepth:
+            # zero thick layer, skip
+            continue
+        elif l.botDepth == 6371:
+            # halfspace/mantle, skip
+            continue
+        else:
+            nlayer = from_crustone_layer(l)
+            merge_layers.append(nlayer)
+    for l in decapitate:
+        merge_layers.append(l)
+    return merge_layers
+
+def from_crustone_layer(layer):
+    return createLayer(layer.thick(), layer.vp, layer.vs, layer.rho, type="crust")
+
 
 def modifyCrustToOceanic(layers):
     """

@@ -315,6 +315,11 @@ class EarthModel:
         return out
     def list_distances(self):
         return list_distances(self.distance)
+    def halfspace_depth(self):
+        t = 0
+        for l in self.layers:
+            t += l['thick']
+        return t
     def __str__(self):
         return pprint.pformat(self.asDict())
 
