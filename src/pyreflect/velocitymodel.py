@@ -41,8 +41,8 @@ def load_model_from_nd(ndtext):
             vp_gradient = 0
             vs_gradient = 0
             if thick > 0:
-                vp_gradient = (prevLayer["vp"]-vp)/thick
-                vs_gradient = (prevLayer["vs"]-vs)/thick
+                vp_gradient = (vp-prevLayer["vp"])/thick
+                vs_gradient = (vs-prevLayer["vs"])/thick
             layer = {
                 "thick": thick,
                 "vp": vp,
@@ -130,8 +130,11 @@ def layersFromModel(modelname, maxdepth):
                 layers.append(splitlayer)
             else:
                 layers.append(layer)
-            halfspace = cloneLayer(layer)
+            bottom_layer = layers[-1]
+            halfspace = cloneLayer(bottom_layer)
             halfspace["thick"] = 0.0
+            halfspace["vp"] = bottom_layer["vp"]+bottom_layer['thick']*bottom_layer['vpgradient']
+            halfspace["vs"] = bottom_layer["vs"]+bottom_layer['thick']*bottom_layer['vsgradient']
             halfspace["vpgradient"] = 0.0
             halfspace["vsgradient"] = 0.0
             layers.append(halfspace)
