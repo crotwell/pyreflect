@@ -1,11 +1,11 @@
-
+import copy
 import pprint
 import json
 import os
 from .gradient import apply_gradient
-from .earthflatten import apply_eft_old, eft_layer
+from .earthflatten import eft_layer
 from .momenttensor import rtp_to_ned
-from .velocitymodel import layersFromAk135f, layersFromPrem, createLayer, cloneLayer
+from .velocitymodel import layersFromAk135f, layersFromPrem, VelocityModelLayer
 
 DIST_SINGLE=1
 DIST_REGULAR=0
@@ -21,8 +21,8 @@ class EarthModel:
         # layers are:
         # thick vp vs rho qp qs  x x x x
         # I think the last 4 are freq parameters for anisotropy but are not used by the code
-        self.layers = [ createLayer(35, 6.5, 3.5, 2.7),
-                        createLayer(0, 8.1, 4.67, 3.32)]
+        self.layers = [ VelocityModelLayer(35, 6.5, 3.5, 2.7),
+                        VelocityModelLayer(0, 8.1, 4.67, 3.32)]
         self.slowness = {
             "lowcut": 0.005,
             "lowpass": 0.01,
@@ -109,25 +109,18 @@ class EarthModel:
         numLayers = int(modelLines[0].strip())
         for i in range(1, numLayers+1):
             line = modelLines[i].split()
-            layer = {
-                  "thick": float(line[0]),
-                  "vp": float(line[1]),
-                  "vpgradient": 0.0,
-                  "vs": float(line[2]),
-                  "vsgradient": 0.0,
-                  "rho": float(line[3]),
-                  "qp": float(line[4]),
-                  "qs": float(line[5]),
-                  "tp1": 1.0e4,
-                  "tp2": 0.0001,
-                  "ts1": 1.0e4,
-                  "ts2": 0.0001
-                }
+            layer = VelocityModelLayer(
+                        float(line[0]),
+                        float(line[1]),
+                        float(line[2]),
+                        float(line[3]),
+                        qp= float(line[4]),
+                        qs= float(line[5]) )
             if len(line) >= 9:
-                layer["tp1"]: float(line[6])
-                layer["tp2"]: float(line[7])
-                layer["ts1"]: float(line[8])
-                layer["ts2"]: float(line[9])
+                layer.tp1: float(line[6])
+                layer.tp2: float(line[7])
+                layer.ts1: float(line[8])
+                layer.ts2: float(line[9])
             out.layers.append(layer)
         i += 1
         line = modelLines[i].split()
@@ -211,12 +204,15 @@ class EarthModel:
             raise ValueError(f"not sure how to interpret tensor: {tensor}")
 
     def asDict(self):
+        layers_dict = []
+        for l in self.layers:
+            layers_dict.append(l.as_dict())
         return {
             "name": self.name,
             "gradientthick": self.gradientthick,
             "eftthick": self.eftthick,
             "isEFT": self.isEFT,
-            "layers": self.layers,
+            "layers": layers_dict,
             "slowness": self.slowness,
             "frequency": self.frequency,
             "distance": self.distance,
@@ -230,7 +226,11 @@ class EarthModel:
         if "name" in data: model.name = data["name"]
         if "gradientthick" in data: model.gradientthick = data["gradientthick"]
         if "eftthick" in data: model.eftthick = data["eftthick"]
-        if "layers" in data: model.layers = data["layers"]
+        if "layers" in data:
+            model.layers = []
+            for dl in data["layers"]:
+                v = VelocityModelLayer.from_dict(dl)
+                model.layers.append(v)
         if "slowness" in data: model.slowness = data["slowness"]
         if "frequency" in data: model.frequency = data["frequency"]
         if "distance" in data: model.distance = data["distance"]
@@ -249,9 +249,8 @@ class EarthModel:
         self.evalGradients()
         out = f"{len(self.layers)}\n"
         for l in self.layers:
-            items = [ l['thick'], l['vp'], l['vs'], l['rho'], l['qp'], l['qs'], l['tp1'], l['tp2'], l['ts1'], l['ts2']]
+            items = [ l.thick, l.vp, l.vs, l.rho, l.qp, l.qs, l.tp1, l.tp2, l.ts1, l.ts2]
             out += self.__format_line_as_GER__(items, precision=precision)
-#            out += f"{format(l['thick'], '.2f')} {l['vp']} {l['vs']} {l['rho']} {l['qp']} {l['qs']} {l['tp1']} {l['tp2']} {l['ts1']} {l['ts2']}\n"
         out += f"{self.slowness['lowcut']} {self.slowness['lowpass']} {self.slowness['highpass']} {self.slowness['highcut']} {self.slowness['controlfac']} \n"
         out += f"{self.frequency['min']} {self.frequency['max']} {self.frequency['nyquist']} {self.frequency['numtimepoints']}\n"
         if self.distance['type'] > 0:
@@ -270,12 +269,14 @@ class EarthModel:
             out += f"{self._momentTensor['m_nn']} {self._momentTensor['m_ne']} {self._momentTensor['m_nd']} {self._momentTensor['m_ee']} {self._momentTensor['m_ed']} {self._momentTensor['m_dd']}\n"
         return out
     def clone(self):
+        return self.__copy__()
+    def __copy__(self):
         out = EarthModel()
         out.name = self.name+" Clone"
         out.gradientthick = self.gradientthick
         out.eftthick = self.eftthick
         out.isEFT = self.isEFT
-        out.layers = [ cloneLayer(x) for x in self.layers ]
+        out.layers = [ copy.deepcopy(x) for x in self.layers ]
         out.slowness = dict(self.slowness)
         out.frequency = dict(self.frequency)
         out.distance = dict(self.distance)
@@ -290,8 +291,8 @@ class EarthModel:
             changeMade = False
             for n in range(len(outLayers)):
                 layer = outLayers[n]
-                if layer["vpgradient"] != 0.0 or layer["vsgradient"] != 0.0:
-                    gradLayers = apply_gradient(outLayers, n, layer['vpgradient'], layer['vsgradient'], self.gradientthick)
+                if layer.vp_gradient != 0.0 or layer.vs_gradient != 0.0:
+                    gradLayers = apply_gradient(outLayers, n, layer.vp_gradient, layer.vs_gradient, self.gradientthick)
                     changeMade = True
                     outLayers = gradLayers
                     break
@@ -304,26 +305,20 @@ class EarthModel:
         out = self.clone()
         out.layers = gradLayers
         return out
-    def eft_old(self):
+    def eft(self, vp_factor=0.05, vs_factor=0.05):
         if (self.isEFT):
             raise ValueError("Model has already been flattened")
-        gradMod = self.evalGradients()
-        eftLayers = apply_eft_old(gradMod.layers, self.eftthick)
-        out = self.clone()
-        out.name = self.name+" EFT (depth factor)"
-        out.isEFT = True
-        out.layers = eftLayers
-        return out
-    def eft(self, vp_factor=0.05, vs_factor=0.05):
         eft_layers = []
         top_depth = 0
         for l in self.layers:
             eft_layers = eft_layers + eft_layer(l, top_depth, vp_factor=vp_factor, vs_factor = vs_factor)
-            top_depth += l["thick"]
+            top_depth += l.thick
         eft_model = self.clone()
         eft_model.name = self.name+" EFT (vp factor)"
         eft_model.isEFT = True
         eft_model.layers = eft_layers
+        eft_model.vp_factor = vp_factor
+        eft_model.vs_factor = vs_factor
         return eft_model
     def vp_vs_depth(self):
         depth = 0
@@ -332,21 +327,21 @@ class EarthModel:
         depth_list = []
         prev_layer = None
         for l in self.layers:
-            if prev_layer is None or prev_layer['vp'] != layer['vp'] or prev_layer['vs'] != layer['vs']:
+            if prev_layer is None or prev_layer.vp != layer.vp or prev_layer.vs != layer.vs:
                 depth_list.append(depth)
-                vp_list.append(l['vp'])
-                vs_list.append(l['vs'])
-            depth += l['thick']
+                vp_list.append(l.vp)
+                vs_list.append(l.vs)
+            depth += l.thick
             depth_list.append(depth)
-            vp_list.append(l['vp'])
-            vs_list.append(l['vs'])
+            vp_list.append(l.vp+l.thick*l.vp_gradient)
+            vs_list.append(l.vs+l.thick*l.vs_gradient)
         return vp_list, vs_list, depth_list
     def list_distances(self):
         return list_distances(self.distance)
     def halfspace_depth(self):
         t = 0
         for l in self.layers:
-            t += l['thick']
+            t += l.thick
         return t
     def __str__(self):
         return pprint.pformat(self.asDict())

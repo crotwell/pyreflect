@@ -1,5 +1,5 @@
 import math
-from .velocitymodel import cloneLayer
+import copy
 
 # Reference radius
 R = 6371.0
@@ -19,62 +19,28 @@ roundDigits = 5 # to avoid 3.1229999999 instaed of 3.123
 #  tcl version Feb. 1996
 #  python version October 2020
 #
-def apply_eft_old(layers, nlfactor):
-#
-# nlfactor is approximate layer thickness for the EFT
-#
-#
-# Revise Model
-#
-    bots = 0.0
-    out = []
-
-    for layerToReplace in layers:
-        tops = bots
-        bots = bots + layerToReplace['thick']
-        topf = R * math.log(R / (R - tops))
-        botf = R * math.log(R / (R - bots))
-        thickf = botf - topf
-        if thickf <= nlfactor:
-            nnl = 1
-        else:
-            nnl = math.ceil(thickf/nlfactor)
-        if nnl < 1:
-            nnl = 1
-
-        ddz = thickf / nnl
-        for ifl in range(nnl):
-            layertopf = topf + ifl*ddz
-            layerbotf = layertopf + ddz
-            expFactor = math.exp((layertopf+layerbotf)/(2*R))
-            eftLayer = cloneLayer(layerToReplace)
-            eftLayer["thick"] = round(ddz, roundDigits)
-            eftLayer["vp"] = round(layerToReplace['vp']*expFactor, roundDigits)
-            eftLayer["vs"] = round(layerToReplace['vs']*expFactor, roundDigits)
-            eftLayer["rho"] = round(layerToReplace['rho']*math.pow(expFactor, l_factor+2), roundDigits)
-            out.append(eftLayer)
-    return out
 
 def eft_layer(layer, top_depth, vp_factor=0.1, vs_factor=0.1, R=R, l_factor=l_factor):
-    thick = layer['thick']
+    thick = layer.thick
     if thick == 0:
-        eft_layer = cloneLayer(layer)
-        eft_layer["vp"] = velocity_flat(layer["vp"], top_depth)
-        eft_layer["vpgradient"] = 0
-        eft_layer["vs"] = velocity_flat(layer["vs"], top_depth)
-        eft_layer["vsgradient"] = 0
-        eft_layer["rho"] = density_flat(layer["rho"], top_depth, R=R, l_factor=l_factor)
+        eft_layer = copy.deepcopy(layer)
+        eft_layer.vp = velocity_flat(layer.vp, top_depth)
+        eft_layer.vp_gradient = 0
+        eft_layer.vs = velocity_flat(layer.vs, top_depth)
+        eft_layer.vs_gradient = 0
+        eft_layer.rho = density_flat(layer.rho, top_depth, R=R, l_factor=l_factor)
+        eft_layer.rho_gradient = 0
         return [ eft_layer ]
     bot_depth = top_depth+thick
     # P wave
-    top_vp_s = layer['vp']
-    bot_vp_s = top_vp_s+layer['vpgradient']*thick
+    top_vp_s = layer.vp
+    bot_vp_s = top_vp_s+layer.vp_gradient*thick
     top_vp_f = velocity_flat(top_vp_s, top_depth, R=R)
     bot_vp_f = velocity_flat(bot_vp_s, top_depth+thick, R=R)
     nnlyrs_vp = math.ceil(abs(bot_vp_f-top_vp_f)/vp_factor)
     # S wave
-    top_vs_s = layer['vs']
-    bot_vs_s = top_vs_s+layer['vsgradient']*thick
+    top_vs_s = layer.vs
+    bot_vs_s = top_vs_s+layer.vs_gradient*thick
     top_vs_f = velocity_flat(top_vs_s, top_depth, R=R)
     bot_vs_f = velocity_flat(bot_vs_s, bot_depth, R=R)
     nnlyrs_vs = math.ceil(abs(bot_vs_f-top_vs_f)/vs_factor)
@@ -94,15 +60,16 @@ def eft_layer(layer, top_depth, vp_factor=0.1, vs_factor=0.1, R=R, l_factor=l_fa
         bot_interp_vp_f = top_interp_vp_f + delta_vp_f
         interp_vp_f = (top_interp_vp_f + bot_interp_vp_f)/2.0
         interp_vs_f = top_vs_f + delta_vs_f/2 + idx*delta_vs_f
-        eft_layer = cloneLayer(layer)
+        eft_layer = copy.deepcopy(layer)
         depth_s = R - radius_for_deltav(top_vp_s, top_depth, bot_vp_s, bot_depth, bot_interp_vp_f-top_vp_f, R=R)
         depth_f = depth_flat(depth_s)
-        eft_layer["thick"] = depth_f - prev_depth
-        eft_layer["vp"] = interp_vp_f
-        eft_layer["vpgradient"] = 0
-        eft_layer["vs"] = interp_vs_f
-        eft_layer["vsgradient"] = 0
-        eft_layer["rho"] = density_flat(layer["rho"], depth_s, R=R, l_factor=l_factor)
+        eft_layer.thick = depth_f - prev_depth
+        eft_layer.vp = interp_vp_f
+        eft_layer.vp_gradient = 0
+        eft_layer.vs = interp_vs_f
+        eft_layer.vs_gradient = 0
+        eft_layer.rho = density_flat(layer.rho, depth_s, R=R, l_factor=l_factor)
+        eft_layer.rho_gradient = 0
         out_layers.append(eft_layer)
         prev_depth = depth_f
     return out_layers

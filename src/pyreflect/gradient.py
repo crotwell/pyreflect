@@ -1,5 +1,5 @@
 import math
-from .velocitymodel import cloneLayer
+import copy
 
 #
 # Replaces a layer with many layers approximationg a gradient in a model
@@ -33,26 +33,27 @@ def apply_gradient(layers, gradLayerNum, pgrad, sgrad, nlfactor):
     gnumlayers = 0
     layerToReplace = layers[gradLayerNum]
 #         how many new layers do we need
-    nnl = math.ceil(layerToReplace['thick']/nlfactor)
+    nnl = math.ceil(layerToReplace.thick/nlfactor)
 #
 
-    dz = layerToReplace['thick'] / nnl
-    dvp = pgrad * layerToReplace['thick'] / nnl
-    dvs = sgrad * layerToReplace['thick'] / nnl
+    dz = layerToReplace.thick / nnl
+    dvp = pgrad * layerToReplace.thick / nnl
+    dvs = sgrad * layerToReplace.thick / nnl
 # use emprical formula for rho so that rho gradient is .32 of p gradient
-    drho = pgrad * .32 * layerToReplace['thick'] / nnl
+    drho = pgrad * .32 * layerToReplace.thick / nnl
 
     roundDigits = 5 # to avoid 3.1229999999 instaed of 3.123
 
     gradLayers = []
     for i in range(nnl):
-        gradLayer = cloneLayer(layerToReplace)
-        gradLayer["thick"] = dz
-        gradLayer["vp"] = round(layerToReplace['vp'] + i * dvp, roundDigits)
-        gradLayer["vpgradient"] = 0.0
-        gradLayer["vs"] = round(layerToReplace['vs'] + i * dvs, roundDigits)
-        gradLayer["vsgradient"] = 0.0
-        gradLayer["rho"] = round(layerToReplace['rho'] + i * drho, roundDigits)
+        gradLayer = copy.deepcopy(layerToReplace)
+        gradLayer.thick = dz
+        gradLayer.vp = round(layerToReplace.vp + i * dvp, roundDigits)
+        gradLayer.vp_gradient = 0.0
+        gradLayer.vs = round(layerToReplace.vs + i * dvs, roundDigits)
+        gradLayer.vs_gradient = 0.0
+        gradLayer.rho = round(layerToReplace.rho + i * drho, roundDigits)
+        gradLayer.rho_gradient = 0.0
         gradLayers.append(gradLayer)
     preLayers = layers[0:gradLayerNum]
     postLayers = layers[gradLayerNum+1:]
@@ -60,10 +61,10 @@ def apply_gradient(layers, gradLayerNum, pgrad, sgrad, nlfactor):
         # gradient in layer before halfspace
         #  Set half space parameters equal to prvious layers parameters to avoid
         #  spurious reflections
-        botGradLayer = cloneLayer(gradLayers[len(gradLayers)-1])
-        botGradLayer["thick"] = 0.0
-        gradLayer["vpgradient"] = 0.0
-        gradLayer["vsgradient"] = 0.0
+        botGradLayer = copy.deepcopy(gradLayers[len(gradLayers)-1])
+        botGradLayer.thick = 0.0
+        gradLayer.vp_gradient = 0.0
+        gradLayer.vs_gradient = 0.0
         postLayers = [ botGradLayer ]
 
     return preLayers + gradLayers + postLayers

@@ -1,5 +1,6 @@
 import pkgutil
 import math
+import copy
 try:
     import crustone
     crustone_ok = True
@@ -15,133 +16,159 @@ DEFAULT_QP = 1500
 DEFAULT_QS = 600
 __c1__ = None
 
-def __load_model_nd__(modelname="prem"):
+class VelocityModelPoint:
+    def __init__(self, depth, vp, vs):
+        self.depth = depth
+        self.vp = vp
+        self.vs = vs
+        self.rho = 0
+        self.qp = 0
+        self.qs = 0
+        self.type = "unknown"
+
+class VelocityModelLayer:
+    def __init__(self, thick, vp, vs, rho, qp=DEFAULT_QP, qs=DEFAULT_QS, tp1=1.0e4, tp2=0.0001, ts1=1.0e4, ts2=0.0001, type="unknown"):
+        self.thick = thick
+        self.vp = vp
+        self.vp_gradient = 0
+        self.vs = vs
+        self.vs_gradient = 0
+        self.rho = rho
+        self.rho_gradient = 0
+        self.qp = float(qp)
+        self.qs = qs
+        self.tp1 = tp1
+        self.tp2 = tp2
+        self.ts1 = ts1
+        self.ts2 = ts2
+        self.type = type
+    def as_dict(self):
+        return {
+            "thick": self.thick,
+            "vp": self.vp,
+            "vp_gradient": self.vp_gradient,
+            "vs": self.vs,
+            "vs_gradient": self.vs_gradient,
+            "rho": self.rho,
+            "rho_gradient": self.rho_gradient,
+            "qp": self.qp,
+            "qs": self.qs,
+            "tp1": self.tp1,
+            "tp2": self.tp2,
+            "ts1": self.ts1,
+            "ts2": self.ts2,
+            "type": self.type,
+        }
+    @staticmethod
+    def from_dict(data):
+        v = VelocityModelLayer(data["thick"], data["vp"], data["vs"], data["rho"])
+        if "vp_gradient" in data: v.vp_gradient = data["vp_gradient"]
+        if "vs_gradient" in data: v.vs_gradient = data["vs_gradient"]
+        if "rho_gradient" in data: v.rho_gradient = data["rho_gradient"]
+        if "qp" in data: v.qp = data["qp"]
+        if "qs" in data: v.qs = data["qs"]
+        if "tp1" in data: v.tp1 = data["tp1"]
+        if "tp2" in data: v.tp2 = data["tp2"]
+        if "ts1" in data: v.ts1 = data["ts1"]
+        if "ts2" in data: v.ts2 = data["ts2"]
+        if "type" in data: v.type = data["type"]
+        return v
+    def __copy__(self):
+        c = VelocityModelLayer(self.thick, self.vp, self.vs, self.rho, type=self.type)
+        c.vp_gradient = self.vp_gradient
+        c.vs_gradient = self.vs_gradient
+        c.rho_gradient = self.rho_gradient
+        c.qp = self.qp
+        c.qs = self.qs
+        c.tp1 = self.tp1
+        c.tp2 = self.tp2
+        c.ts1 = self.ts1
+        c.ts2 = self.ts2
+        return c
+
+
+def load_nd_as_depth_points(modelname="prem"):
     nd_data = pkgutil.get_data(__name__, f"data/{modelname}.nd")
     if nd_data is None:
         return None
-    return load_model_from_nd(nd_data.decode('ascii'))
-
-def load_model_from_nd(ndtext):
-    layers = []
-    prevDepth = 0
-    firstLine = True
-    layer = None
-    prevLayer = None
-    layerType = "crust"
+    ndtext = nd_data.decode('ascii')
+    points = []
+    layer_type = "crust"
     for line in ndtext.splitlines():
         if line == "mantle" or line == "outer-core" or line == "inner-core":
-            layerType = line
+            layer_type = line
         else:
             depth,vp,vs,rho,qp,qs = line.split()
-            depth = float(depth)
-            vp = float(vp)
-            vs = float(vs)
-            rho = float(rho)
-            thick = depth-prevDepth
-            vp_gradient = 0
-            vs_gradient = 0
-            if thick > 0:
-                vp_gradient = (vp-prevLayer["vp"])/thick
-                vs_gradient = (vs-prevLayer["vs"])/thick
-            layer = {
-                "thick": thick,
-                "vp": vp,
-                "vpgradient": vp_gradient,
-                "vs": vs,
-                "vsgradient": vs_gradient,
-                "rho": rho,
-                "qp": float(qp),
-                "qs": float(qs),
-                "tp1": 1.0e4,
-                "tp2": 0.0001,
-                "ts1": 1.0e4,
-                "ts2": 0.0001,
-                "type": layerType,
-            }
-            if firstLine:
-                firstLine = False
-            elif depth == prevDepth:
-                pass
-            else:
-                layers.append(layer)
-            prevLayer = layer
-            prevDepth = depth
-    layers.append(layer)
+            p = VelocityModelPoint(float(depth), float(vp), float(vs))
+            p.rho = float(rho)
+            p.qp = float(qp)
+            p.qs = float(qs)
+            p.type = layer_type
+            points.append(p)
+    return points
+
+def layers_from_depth_points(points):
+    prev = points[0]
+    layers = []
+    for point in points[1:]:
+        if prev.depth != point.depth:
+            thick = point.depth - prev.depth
+            vp_gradient = (point.vp-prev.vp)/thick
+            vs_gradient = (point.vs-prev.vs)/thick
+            rho_gradient = (point.rho-prev.rho)/thick
+            layer = VelocityModelLayer(thick, prev.vp, prev.vs, prev.rho, qp=prev.qp, qs=prev.qs, type=prev.type)
+            layer.vp_gradient = vp_gradient
+            layer.vs_gradient = vs_gradient
+            layer.rho_gradient = rho_gradient
+            layers.append(layer)
+        else:
+            # discontinuity
+            pass
+        prev = point
     return layers
+
+
 
 def layersFromEMC(modelname, maxdepth, lat=0, lon=0):
     url = f"http://service.iris.edu/irisws/earth-model/1/line?model={modelname}&lat={lat}&lon={lon}&format=geocsv&nodata=404"
     with urllib.request.urlopen('http://python.org/') as response:
         respOut = response.read()
 
-def createLayer(thick, vp, vs, rho, qp=DEFAULT_QP, qs=DEFAULT_QS, tp1=1.0e4, tp2=0.0001, ts1=1.0e4, ts2=0.0001, type="unknown"):
-    return {
-      "thick": thick,
-      "vp": vp,
-      "vpgradient": 0.0,
-      "vs": vs,
-      "vsgradient": 0.0,
-      "rho": rho,
-      "qp": qp,
-      "qs": qs,
-      "tp1": tp1,
-      "tp2": tp2,
-      "ts1": ts1,
-      "ts2": ts2,
-      "type": type
-    }
 
-def cloneLayer(layer):
-    return {
-        "thick": layer["thick"],
-        "vp": layer['vp'],
-        "vpgradient": layer['vpgradient'],
-        "vs": layer['vs'],
-        "vsgradient": layer['vsgradient'],
-        "rho": layer['rho'],
-        "qp": layer['qp'],
-        "qs": layer['qs'],
-        "tp1": layer['tp1'],
-        "tp2": layer['tp2'],
-        "ts1": layer['ts1'],
-        "ts2": layer['ts2'],
-        "type": layer['type'],
-    }
 
 def layersFromAk135f(maxdepth):
-    return layersFromModel('ak135fcont', maxdepth)
+    return layers_from_model('ak135fcont', maxdepth)
 
 def layersFromPrem(maxdepth):
-    return layersFromModel('prem', maxdepth)
+    return layers_from_model('prem', maxdepth)
 
-def layersFromModel(modelname, maxdepth):
-    premLayers = __load_model_nd__(modelname)
-    if premLayers is None:
-        with open(modelname, 'r') as nd_file:
-            premLayers = nd_file.read()
+def layers_from_model(modelname, maxdepth):
+    points = load_nd_as_depth_points(modelname)
+    model_layers = layers_from_depth_points(points)
     depth = 0
     layers = []
-    for layer in premLayers:
-        botDepth = depth + layer["thick"]
-        if botDepth >= maxdepth:
+    for layer in model_layers:
+        botDepth = depth + layer.thick
+        if botDepth < maxdepth:
+            layers.append(layer)
+            depth = botDepth
+        else:
             if botDepth > maxdepth:
-                splitlayer = cloneLayer(layer)
-                splitlayer["thick"] = maxdepth - depth
+                splitlayer = copy.deepcopy(layer)
+                splitlayer.thick = maxdepth - depth
                 layers.append(splitlayer)
             else:
                 layers.append(layer)
             bottom_layer = layers[-1]
-            halfspace = cloneLayer(bottom_layer)
-            halfspace["thick"] = 0.0
-            halfspace["vp"] = bottom_layer["vp"]+bottom_layer['thick']*bottom_layer['vpgradient']
-            halfspace["vs"] = bottom_layer["vs"]+bottom_layer['thick']*bottom_layer['vsgradient']
-            halfspace["vpgradient"] = 0.0
-            halfspace["vsgradient"] = 0.0
+            halfspace = copy.deepcopy(bottom_layer)
+            halfspace.thick = 0.0
+            halfspace.vp = bottom_layer.vp+bottom_layer.thick*bottom_layer.vp_gradient
+            halfspace.vs = bottom_layer.vs+bottom_layer.thick*bottom_layer.vs_gradient
+            halfspace.vp_gradient = 0.0
+            halfspace.vs_gradient = 0.0
             layers.append(halfspace)
-            return layers
-        else:
-            layers.append(layer)
-            depth = botDepth
+            break
+    return layers
 
 def load_crustone():
     check_crustone_import_ok()
@@ -154,8 +181,8 @@ def modify_crustone(layers, lat, lon):
     check_crustone_import_ok()
     num_crust_layers = 0
     orig_crust_thick = 0
-    while layers[num_crust_layers]['type'] == 'crust':
-        orig_crust_thick += layers[num_crust_layers]["thick"]
+    while layers[num_crust_layers].type == 'crust':
+        orig_crust_thick += layers[num_crust_layers].thick
         num_crust_layers += 1
     decapitate = layers[num_crust_layers:]
 
@@ -168,12 +195,12 @@ def modify_crustone(layers, lat, lon):
         # increasing the overall model thickness
         # note profile.layers[0].topDepth is negative for high elevation
         extra_thickness = crustone_thick - orig_crust_thick + profile.layers[0].topDepth
-        if decapitate[0]["thick"] > extra_thickness:
-            decapitate[0]["thick"] = decapitate[0]['thick'] - (extra_thickness)
+        if decapitate[0].thick > extra_thickness:
+            decapitate[0].thick = decapitate[0].thick - (extra_thickness)
         else:
-            raise Exception(f"top mantle layer is not thick enough to subtract extra crust: orig: {orig_crust_thick} crustone: {crustone_thick}  top mantle: {decapitate[0]['thick']}")
+            raise Exception(f"top mantle layer is not thick enough to subtract extra crust: orig: {orig_crust_thick} crustone: {crustone_thick}  top mantle: {decapitate[0].thick}")
     else:
-        decapitate[0]["thick"] = orig_crust_thick - crustone_thick
+        decapitate[0].thick = orig_crust_thick - crustone_thick
     merge_layers = []
     for l in profile.layers:
         if l.topDepth == l.botDepth:
@@ -190,7 +217,7 @@ def modify_crustone(layers, lat, lon):
     return merge_layers
 
 def from_crustone_layer(layer):
-    return createLayer(layer.thick(), layer.vp, layer.vs, layer.rho, type="crust")
+    return VelocityModelLayer(layer.thick(), layer.vp, layer.vs, layer.rho, type="crust")
 
 
 def modifyCrustToOceanic(layers):
@@ -202,16 +229,16 @@ def modifyCrustToOceanic(layers):
     crustLayer1 = layers[0]
     crustLayer2 = layers[1]
     mantleLayer = layers[2]
-    if crustLayer1['thick'] != 15.0 and crustLayer2['thick'] != 9.4 and mantleLayer['vp'] != 8.11061:
-        raise Error(f"layers do not look like PREM, previously modified? thickness: {crustLayer1['thick']} {crustLayer2['thick']}")
-    origCrustThick = crustLayer1['thick'] + crustLayer2['thick']
-    layers[0]['thick'] = 6.96
-    layers[0]['vp'] = 6.6
-    layers[0]['vs'] = 3.65
-    layers[0]['rho'] = 2.90
-    layers[1]['thick'] = 12.91-6.96
-    layers[1]['vp'] = 7.11
-    layers[1]['vs'] = 3.91
-    layers[1]['rho'] = 3.05
-    layers[2]['thick'] = layers[2]['thick'] + origCrustThick - layers[0]['thick'] - layers[1]['thick']
+    if crustLayer1.thick != 15.0 and crustLayer2.thick != 9.4 and mantleLayer.vp != 8.11061:
+        raise Error(f"layers do not look like PREM, previously modified? thickness: {crustLayer1.thick} {crustLayer2.thick}")
+    origCrustThick = crustLayer1.thick + crustLayer2.thick
+    layers[0].thick = 6.96
+    layers[0].vp = 6.6
+    layers[0].vs = 3.65
+    layers[0].rho = 2.90
+    layers[1].thick = 12.91-6.96
+    layers[1].vp = 7.11
+    layers[1].vs = 3.91
+    layers[1].rho = 3.05
+    layers[2].thick = layers[2].thick + origCrustThick - layers[0].thick - layers[1].thick
     return layers
