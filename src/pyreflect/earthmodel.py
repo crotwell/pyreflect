@@ -5,7 +5,7 @@ import os
 from .gradient import apply_gradient
 from .earthflatten import eft_layer
 from .momenttensor import rtp_to_ned
-from .velocitymodel import layersFromAk135f, layersFromPrem, VelocityModelLayer
+from .velocitymodel import layersFromAk135f, layersFromPrem, VelocityModelLayer, modify_crustone
 
 DIST_SINGLE=1
 DIST_REGULAR=0
@@ -299,6 +299,18 @@ class EarthModel:
         out = self.clone()
         out.layers = outLayers
         return out
+
+    def crustone(self, lat, lon):
+        """
+        Replaces current crust/upper mantle with the values from Crust1.0.
+        Note this also shifts the model to account for elevation, so for
+        example in tibet the 410 would be at about 414 km depth.
+        """
+        model = copy.deepcopy(self)
+        c1layers = modify_crustone(model.layers, lat, lon)
+        model.layers = c1layers
+        model.name = model.name+f" modified for Crust 1.0 at {lat}/{lon}"
+        return model
 
     def gradient(self, gradLayerNum, pgrad, sgrad, nlfactor):
         gradLayers = apply_gradient(self.layers, gradLayerNum, pgrad, sgrad, nlfactor)
