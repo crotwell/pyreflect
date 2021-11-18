@@ -124,6 +124,7 @@ def create_metadata(network, station, loccode, bandcode, gaincode, model, scalar
 
 def create_fake_metadata(model, loccode, bandcode, gaincode, ampStyle=AMP_STYLE_VEL):
     network_code="XX"
+    gain=1.0
     inputunits = "m/s"
     if ampStyle == AMP_STYLE_DISP:
         inputunits = "m"
