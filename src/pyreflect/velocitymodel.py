@@ -15,6 +15,8 @@ def check_crustone_import_ok():
 DEFAULT_QP = 1500
 DEFAULT_QS = 600
 __c1__ = None
+PREM = "prem"
+AK135F = 'ak135fcont'
 
 class VelocityModelPoint:
     def __init__(self, depth, vp, vs):
@@ -25,6 +27,8 @@ class VelocityModelPoint:
         self.qp = 0
         self.qs = 0
         self.type = "unknown"
+    def __str__(self):
+        return f"{self.depth} {self.vp} {self.vs} {self.rho}"
 
 class VelocityModelLayer:
     def __init__(self, thick, vp, vs, rho, qp=DEFAULT_QP, qs=DEFAULT_QS, tp1=1.0e4, tp2=0.0001, ts1=1.0e4, ts2=0.0001, type="unknown"):
@@ -59,6 +63,18 @@ class VelocityModelLayer:
             "ts2": self.ts2,
             "type": self.type,
         }
+    def as_points(self, top_depth):
+        top = VelocityModelPoint(top_depth, self.vp, self.vs)
+        top.rho = self.rho
+        top.qp = self.qp
+        top.qs = self.qs
+        top.type = self.type
+        bot = VelocityModelPoint(top_depth+self.thick, self.vp+self.vp_gradient*self.thick, self.vs+self.vs_gradient*self.thick)
+        bot.rho = self.rho+self.rho_gradient*self.thick
+        bot.qp = self.qp
+        bot.qs = self.qs
+        bot.type = self.type
+        return top, bot
     @staticmethod
     def from_dict(data):
         v = VelocityModelLayer(data["thick"], data["vp"], data["vs"], data["rho"])
@@ -85,9 +101,10 @@ class VelocityModelLayer:
         c.ts1 = self.ts1
         c.ts2 = self.ts2
         return c
+    def __str__(self):
+        return f"{self.thick} {self.vp} {self.vs} {self.rho}"
 
-
-def load_nd_as_depth_points(modelname="prem"):
+def load_nd_as_depth_points(modelname=AK135F):
     nd_data = pkgutil.get_data(__name__, f"data/{modelname}.nd")
     if nd_data is None:
         return None
@@ -126,8 +143,43 @@ def layers_from_depth_points(points):
             pass
         prev = point
     return layers
+def save_nd(points, filename):
+    with open(filename, 'w') as out:
+        prev = points[0]
+        for p in points:
+            if p.type != prev.type:
+                out.write(f"{p.type}\n")
+            out.write(f"{p.depth} {p.vp} {p.vs} {p.rho}\n")
+            prev = p
+def extend_whole_earth(points, extend_points):
+    out = []
+    for p in points:
+        out.append(p)
+        last = p
+    for p in extend_points:
+        if p.depth < last.depth:
+            # too shallow
+            pass
+        elif p.depth == last.depth:
+            if p.vp != last.vp or p.vs != last.vs:
+                # discontinuity, output
+                out.append(p)
+            else:
+                pass
+        else:
+            out.append(p)
+    return out
 
-
+def depth_points_from_layers(layers):
+    points = []
+    top_depth = 0
+    for l in layers:
+        top, bot = l.as_points(top_depth)
+        points.append(top)
+        if bot.vp != top.vp or bot.vs != top.vs:
+            points.append(bot)
+        top_depth = bot.depth
+    return points
 
 def layersFromEMC(modelname, maxdepth, lat=0, lon=0):
     url = f"http://service.iris.edu/irisws/earth-model/1/line?model={modelname}&lat={lat}&lon={lon}&format=geocsv&nodata=404"
@@ -137,10 +189,10 @@ def layersFromEMC(modelname, maxdepth, lat=0, lon=0):
 
 
 def layersFromAk135f(maxdepth):
-    return layers_from_model('ak135fcont', maxdepth)
+    return layers_from_model(AK135F, maxdepth)
 
 def layersFromPrem(maxdepth):
-    return layers_from_model('prem', maxdepth)
+    return layers_from_model(PREM, maxdepth)
 
 def layers_from_model(modelname, maxdepth):
     points = load_nd_as_depth_points(modelname)
