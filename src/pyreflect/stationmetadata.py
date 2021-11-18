@@ -8,7 +8,7 @@ DIST_REGULAR=0
 DIST_IRREGULAR=-1
 
 emptyStationXML = """
-<?xml version="1.0" encoding="ISO-8859-1"?>
+<?xml version="1.0" ?>
 <FDSNStationXML xmlns="http://www.fdsn.org/xml/station/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.fdsn.org/xml/station/1 http://www.fdsn.org/xml/station/fdsn-station-1.1.xsd" schemaVersion="1.1">
     <Source>mgenkennett</Source>
     <Sender>pyreflect</Sender>
@@ -98,7 +98,7 @@ emptyStationXML = """
 </FDSNStationXML>
 """
 
-def createMetadata(network, station, loccode, bandcode, gaincode, model, scalar_moment_N_m, ampStyle):
+def create_metadata(network, station, loccode, bandcode, gaincode, model, scalar_moment_N_m, ampStyle):
     inputunits = "m/s"
     if ampStyle == AMP_STYLE_DISP:
         inputunits = "m"
@@ -122,19 +122,12 @@ def createMetadata(network, station, loccode, bandcode, gaincode, model, scalar_
     return emptyStationXML.format(**data).strip()
 
 
-def createFakeMetadata(model, loccode, bandcode, gaincode, scalar_moment_N_m, ampStyle):
+def create_fake_metadata(model, loccode, bandcode, gaincode, ampStyle=AMP_STYLE_VEL):
     network_code="XX"
     inputunits = "m/s"
     if ampStyle == AMP_STYLE_DISP:
         inputunits = "m"
-    distList = []
-    if model.distance['type'] > 0:
-        distList.append(distance['distance'])
-    elif model.distance['type'] == DIST_REGULAR:
-        for i in range(model.distance['num']):
-            distList.append(model.distance['min']+i*model.distance['delta'])
-    else:
-        distList = model.distance['distanceList']
+    distList = model.list_distances()
     fakeXml = None
     for d in distList:
         deg = d/111.19
@@ -152,7 +145,7 @@ def createFakeMetadata(model, loccode, bandcode, gaincode, scalar_moment_N_m, am
           "sitename": f"fake {deg} deg",
           "radialaz": model.distance['azimuth'],
           "transverseaz": (model.distance['azimuth']+90) % 360,
-          "gain": 1/moment_scale_factor(scalar_moment_N_m),
+          "gain": gain,
           "inputunits": inputunits,
           "sps": model.frequency['nyquist']
         }
