@@ -195,7 +195,6 @@ def depth_points_from_layers(layers):
     top_depth = 0
     prev = None
     for l in layers:
-        print(f"depth_points_from_layers: {l}")
         top, bot = l.as_points(top_depth)
         if prev is None or prev.vp != top.vp or prev.vs != top.vs:
             points.append(top)

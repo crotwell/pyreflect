@@ -141,7 +141,6 @@ def mspec_to_stream(rundirectory, model, reduceVel, offset, phase_list=["P","S"]
                 }
             }
         # add arrival times and phase name as flags in SAC header
-        print(f"Get arrivals: h:{tsObj['depth']} at {tsObj['distance']} km, {tsObj['distance']*km_to_deg} deg")
         arrivals = taupymodel.get_travel_times(source_depth_in_km=tsObj['depth'],
                                               distance_in_degree=tsObj['distance']*km_to_deg,
                                               phase_list=phase_list)
