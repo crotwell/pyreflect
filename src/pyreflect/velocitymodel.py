@@ -29,6 +29,13 @@ class VelocityModelPoint:
         self.type = "unknown"
     def __str__(self):
         return f"{self.depth} {self.vp} {self.vs} {self.rho}"
+    def __copy__(self):
+        v = VelocityModelPoint(self.depth, self.vp, self.vs)
+        v.rho = self.rho
+        v.qp = self.qp
+        v.qs = self.qs
+        v.type = self.type
+        return v
 
 class VelocityModelLayer:
     def __init__(self, thick, vp, vs, rho, qp=DEFAULT_QP, qs=DEFAULT_QS, tp1=1.0e4, tp2=0.0001, ts1=1.0e4, ts2=0.0001, type="unknown"):
@@ -149,14 +156,27 @@ def save_nd(points, filename):
         for p in points:
             if p.type != prev.type:
                 out.write(f"{p.type}\n")
-            out.write(f"{p.depth} {p.vp} {p.vs} {p.rho}\n")
+            out.write(f"{round(p.depth, 6):<8} {round(p.vp, 6):<8} {round(p.vs, 6):<8} {round(p.rho, 6):<8}\n")
             prev = p
-def extend_whole_earth(points, extend_points):
+def shift_by_elevation(p, elevation):
+    """
+    Shift a depth point to account for elevation. So for a model with 2 km elevation,
+    a point at 100 km depth below surface is really at 98 relative to sea level.
+    Similarly, a point at 100 km depth in a global model is 102 km deep relative
+    to surface in local model. So when pasting a global model below a local model,
+    the global depths should increase by elevation, effectively making the earth
+    have larger radius.
+    """
+    pp = copy.copy(p)
+    pp.depth=pp.depth+elevation
+    return pp
+def extend_whole_earth(points, extend_points, elevation=0.0):
     out = []
     for p in points:
         out.append(p)
         last = p
     for p in extend_points:
+        p = shift_by_elevation(p, elevation)
         if p.depth < last.depth:
             # too shallow
             pass
@@ -173,12 +193,15 @@ def extend_whole_earth(points, extend_points):
 def depth_points_from_layers(layers):
     points = []
     top_depth = 0
+    prev = None
     for l in layers:
+        print(f"depth_points_from_layers: {l}")
         top, bot = l.as_points(top_depth)
-        points.append(top)
-        if bot.vp != top.vp or bot.vs != top.vs:
-            points.append(bot)
+        if prev is None or prev.vp != top.vp or prev.vs != top.vs:
+            points.append(top)
+        points.append(bot)
         top_depth = bot.depth
+        prev = bot
     return points
 
 def layersFromEMC(modelname, maxdepth, lat=0, lon=0):
@@ -230,6 +253,10 @@ def load_crustone():
     return __c1__
 
 def modify_crustone(layers, lat, lon):
+    """
+    Modifies layers to past Crust1.0 model on top in place of existing crust.
+    Returns new layers
+    """
     check_crustone_import_ok()
     num_crust_layers = 0
     orig_crust_thick = 0

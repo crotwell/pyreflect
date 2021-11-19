@@ -5,7 +5,10 @@ import os
 from .gradient import apply_gradient
 from .earthflatten import eft_layer
 from .momenttensor import rtp_to_ned
-from .velocitymodel import layersFromAk135f, layersFromPrem, VelocityModelLayer, modify_crustone
+from .velocitymodel import layersFromAk135f, layersFromPrem, VelocityModelLayer, modify_crustone, \
+        AK135F, depth_points_from_layers, load_nd_as_depth_points, extend_whole_earth, save_nd, \
+        load_crustone
+
 
 DIST_SINGLE=1
 DIST_REGULAR=0
@@ -64,6 +67,9 @@ class EarthModel:
             "m_ee": 0.0,
             "m_ed": 0.0,
             "m_dd": 0.0
+        }
+        self.extra = {
+            "elevation": 0.0,
         }
     @staticmethod
     def loadPrem(maxdepth ):
@@ -244,7 +250,11 @@ class EarthModel:
     def __format_line_as_GER__(items, precision='.4f'):
         stringItems = [format(x, precision) for x in items]
         return " ".join(stringItems)+"\n"
-
+    def export_layers_as_nd(self, filename, base_model=AK135F):
+        points = depth_points_from_layers(self.layers)
+        ak135points = load_nd_as_depth_points(base_model)
+        points = extend_whole_earth(points, ak135points, elevation=self.extra['elevation'])
+        save_nd(points, filename)
     def asGER(self, precision='.4f'):
         self.evalGradients()
         out = f"{len(self.layers)}\n"
@@ -302,14 +312,20 @@ class EarthModel:
 
     def crustone(self, lat, lon):
         """
-        Replaces current crust/upper mantle with the values from Crust1.0.
+        Returns a new model formed by replacing the current crust/upper mantle
+        with the values from Crust1.0.
         Note this also shifts the model to account for elevation, so for
         example in tibet the 410 would be at about 414 km depth.
+
         """
         model = copy.deepcopy(self)
+        c1 = load_crustone()
+        c1profile = c1.find_profile(lat, lon)
+        elevation = c1profile.elevation()
         c1layers = modify_crustone(model.layers, lat, lon)
         model.layers = c1layers
         model.name = model.name+f" modified for Crust 1.0 at {lat}/{lon}"
+        model.extra["elevation"] = elevation
         return model
 
     def gradient(self, gradLayerNum, pgrad, sgrad, nlfactor):
