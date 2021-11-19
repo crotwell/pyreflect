@@ -96,6 +96,7 @@ def create_taupymodel(model, extendmodel=AK135F):
         extend_points = load_nd_as_depth_points(extendmodel)
         points = extend_whole_earth(points, extend_points)
         save_nd(points, nd_filename)
+        save_nd(points, "/Users/crotwell/saved_model.nd")
         mod_create = obspy.taup.taup_create.TauPCreate(input_filename=nd_filename,
                                     output_filename=output_filename)
         mod_create.load_velocity_model()
