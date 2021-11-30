@@ -87,6 +87,30 @@ def ned_to_rtp(ned_momenttensor):
         "m_tp": -1*mt["m_ne"]
     }
 
+def ned_Nm_to_dynecm(momenttensor):
+    mt = momenttensor
+    out = {
+        "m_dd": mt["m_dd"]*dyne_cm_per_newton_meter,
+        "m_nn": mt["m_nn"]*dyne_cm_per_newton_meter,
+        "m_ee": mt["m_ee"]*dyne_cm_per_newton_meter,
+        "m_nd": mt["m_nd"]*dyne_cm_per_newton_meter,
+        "m_ed": mt["m_ed"]*dyne_cm_per_newton_meter,
+        "m_ne": mt["m_ne"]*dyne_cm_per_newton_meter,
+    }
+    return out
+
+def ned_dynecm_to_gerscale(momenttensor):
+    mt = momenttensor
+    out = {
+        "m_dd": mt["m_dd"]/randall_unit_scale,
+        "m_nn": mt["m_nn"]/randall_unit_scale,
+        "m_ee": mt["m_ee"]/randall_unit_scale,
+        "m_nd": mt["m_nd"]/randall_unit_scale,
+        "m_ed": mt["m_ed"]/randall_unit_scale,
+        "m_ne": mt["m_ne"]/randall_unit_scale,
+    }
+    return out
+
 def to_beachballarray(momenttensor):
     """converts to list suitable for obspy.imaging.beachball
     """
