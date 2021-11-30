@@ -15,12 +15,12 @@ SOURCE_STYLE_STEP = 'step'
 SOURCE_STYLE_IMPULSE = 'impulse'
 
 MECH_NAMES = {
-  0: '_mzz ',
-  1: '_mxy ',
-  2: '_mxz ',
-  3: '_mxx ',
-  4: '_myz ',
-  5: '_myy '
+  0: 'zz',
+  1: 'xy',
+  2: 'xz',
+  3: 'xx',
+  4: 'yz',
+  5: 'yy'
 }
 
 
@@ -172,6 +172,7 @@ def readSpecFile(filename, reduceVel = 8.0, offset = -10.0, ampStyle=AMP_STYLE_V
                       "timeReduce": timeReduce,
                       "distance": distance,
                       "depth": depth,
+                      "mech": mech,
                       "z": u0_td, # z down in GER style synthetics
                       "r": w0_td,
                       "t": tn_td,
