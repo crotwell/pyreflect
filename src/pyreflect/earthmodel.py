@@ -71,7 +71,7 @@ class EarthModel:
         self.extra = {
             "elevation": 0.0,
             "reduce_velocity": 8.0,
-            "offset": 0.0,
+            "offset": -10.0,
         }
     @staticmethod
     def loadPrem(maxdepth ):

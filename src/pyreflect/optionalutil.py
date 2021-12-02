@@ -123,7 +123,7 @@ def create_taupymodel(model, extendmodel=AK135F):
         taup.model = tau_model
     return taup
 
-def mspec_to_stream(rundirectory, model, reduceVel, offset, phase_list=["P","S"], ampStyle=AMP_STYLE_VEL, mspec_filename='mspec'):
+def mspec_to_stream(rundirectory, model, reduceVel=None, offset=None, phase_list=["P","S"], ampStyle=AMP_STYLE_VEL, mspec_filename='mspec'):
     check_obspy_import_ok()
     stream = None
     bandcode = 'B'
@@ -132,6 +132,14 @@ def mspec_to_stream(rundirectory, model, reduceVel, offset, phase_list=["P","S"]
     netcode = "XX"
     taupymodel = create_taupymodel(model, extendmodel=AK135F)
 
+    if reduceVel is None and model.extra['reduce_velocity'] is not None:
+        reduceVel = model.extra['reduce_velocity']
+    elif reduceVel is None:
+        reduceVel = 0.0
+    if offset is None and model.extra['offset'] is not None:
+        offset = model.extra['offset']
+    elif offset is None:
+        offset = 0.0
     km_to_deg = 180/taupymodel.model.radius_of_planet
     results = readSpecFile(os.path.join(rundirectory, mspec_filename),reduceVel = reduceVel, offset = offset)
     ampStyle = results['inputs']['time']['ampStyle']
