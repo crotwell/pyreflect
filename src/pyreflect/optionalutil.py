@@ -9,6 +9,8 @@ from .earthmodel import EarthModel, list_distances
 from .specfile import readSpecFile, AMP_STYLE_VEL, AMP_STYLE_DISP
 from .velocitymodel import AK135F, depth_points_from_layers, load_nd_as_depth_points, extend_whole_earth, save_nd
 from .stationmetadata import create_fake_metadata
+from .distaz import DistAz
+
 try:
     import obspy
     import obspy.taup
@@ -43,9 +45,10 @@ def estimate_for_phases(dist_params, source_depths, phase_list, base_model="ak13
     earliestArrival = None
 
     for depth_km in source_depths:
-        for distDeg in list_distances(dist_params):
+        for dist_km in list_distances(dist_params):
+            dist_deg = DistAz.kilometersToDegrees(dist_km)
             arrivals = taumodel.get_pierce_points(source_depth_in_km=depth_km,
-                                                distance_in_degree=distDeg,
+                                                distance_in_degree=dist_deg,
                                                 phase_list=phase_list)
             for a in arrivals:
                 if earliestArrival is None or earliestArrival.time > a.time:
@@ -73,11 +76,25 @@ def estimate_for_phases(dist_params, source_depths, phase_list, base_model="ak13
         "highcut": round(maxRayParam*1.5, ROUND_SLOWNESS_DIGITS),
         "controlfac": 1.0
         }
-    model.extra = {
-        "earliestArrival": earliestArrival,
-    }
+    model.extra["earliest_arrival"] = arrival_to_dict(earliestArrival)
+    model.extra["reduce_velocity"] = \
+        DistAz.degreesToKilometers(earliestArrival.distance) / earliestArrival.time
+    print(f"earliest: {earliestArrival}")
     return model
 
+def arrival_to_dict(a):
+    return {
+        "time": a.time,
+        "distance": a.distance,
+        "source_depth": a.source_depth,
+        "name": a.name,
+        "ray_param": a.ray_param,
+        "receiver_depth": a.receiver_depth,
+        "takeoff_angle": a.takeoff_angle,
+        "incident_angle": a.incident_angle,
+        "purist_distance": a.purist_distance,
+        "purist_name": a.purist_name,
+    }
 
 def load_mspec():
     check_obspy_import_ok()

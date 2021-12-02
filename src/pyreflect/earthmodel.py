@@ -70,6 +70,8 @@ class EarthModel:
         }
         self.extra = {
             "elevation": 0.0,
+            "reduce_velocity": 8.0,
+            "offset": 0.0,
         }
     @staticmethod
     def loadPrem(maxdepth ):
@@ -224,7 +226,8 @@ class EarthModel:
             "distance": self.distance,
             "sourceDepths": self.sourceDepths,
             "receiverDepth": self.receiverDepth,
-            "momentTensor": self.momentTensor
+            "momentTensor": self.momentTensor,
+            "extra": self.extra,
         }
     @staticmethod
     def fromDict(data):
@@ -243,6 +246,7 @@ class EarthModel:
         if "sourceDepths" in data: model.sourceDepths = data["sourceDepths"]
         if "receiverDepth" in data: model.receiverDepth = data["receiverDepth"]
         if "momentTensor" in data: model.momentTensor = data["momentTensor"]
+        if "extra" in data: model.extra = data["extra"]
         return model
     def asJSON(self):
         return json.dumps(self.asDict(), indent=4)
@@ -293,6 +297,7 @@ class EarthModel:
         out.sourceDepths = self.sourceDepths[:]
         out.receiverDepth = self.receiverDepth
         out.momentTensor = dict(self.momentTensor)
+        out.extra = dict(self.extra)
         return out
     def evalGradients(self):
         outLayers = self.layers
