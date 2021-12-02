@@ -8,7 +8,7 @@ from io import StringIO
 from .earthmodel import EarthModel, list_distances
 from .specfile import readSpecFile, AMP_STYLE_VEL, AMP_STYLE_DISP
 from .velocitymodel import AK135F, depth_points_from_layers, load_nd_as_depth_points, extend_whole_earth, save_nd
-from .stationmetadata import create_fake_metadata
+from .stationmetadata import create_fake_metadata, create_stacode_for_dist
 from .distaz import DistAz
 
 try:
@@ -126,6 +126,7 @@ def create_taupymodel(model, extendmodel=AK135F):
 def mspec_to_stream(rundirectory, model, reduceVel=None, offset=None, phase_list=None, ampStyle=AMP_STYLE_VEL, mspec_filename='mspec'):
     check_obspy_import_ok()
     stream = None
+    inv = None
     bandcode = 'B'
     gaincode = 'H'
     loccode = "SY"
@@ -153,18 +154,19 @@ def mspec_to_stream(rundirectory, model, reduceVel=None, offset=None, phase_list
     else:
         idep = obspy.io.sac.header.ENUM_VALS['iunkn']
     for tsObj in results['timeseries']:
-        distStr = f"D{tsObj['distance']}"[:6].replace('.','_').strip('_')
         tsObj['depth'] = round(tsObj['depth'], 5)
+        stacode = create_stacode_for_dist(tsObj['distance'])
         commonHeader = {
             'sampling_rate': results['inputs']['frequency']['nyquist']*2.0,
             'channel': bandcode+gaincode+'Z',
             'location': loccode,
-            'station': distStr,
+            'station': stacode,
             'network': netcode,
             'starttime': UTCDateTime(0)+tsObj['timeReduce'],
             'sac': {
                     'b': tsObj['timeReduce'],
                     'dist': tsObj['distance'],
+                    'gcarc': tsObj['distance']*km_to_deg,
                     'evdp': tsObj['depth'],
                     'idep': idep
                 }
@@ -187,17 +189,14 @@ def mspec_to_stream(rundirectory, model, reduceVel=None, offset=None, phase_list
         header.component = 'Z'
         header.npts = len(tsObj['z'])
         z = obspy.Trace(tsObj['z'], header)
-        #z.write(os.path.join(rundirectory, f"{header.component}_{distStr}_{tsObj['depth']}.sac"), format="SAC")
         header = Stats(commonHeader)
         header.component = 'R'
         header.npts = len(tsObj['r'])
         r = obspy.Trace(tsObj['r'], header)
-        #r.write(os.path.join(rundirectory, f"{header.component}_{distStr}_{tsObj['depth']}.sac"), format="SAC")
         header = Stats(commonHeader)
         header.component = 'T'
         header.npts = len(tsObj['t'])
         t = obspy.Trace(tsObj['t'], header)
-        #t.write(os.path.join(rundirectory, f"{header.component}_{distStr}_{tsObj['depth']}.sac"), format="SAC")
         if stream is None:
             stream = obspy.Stream(traces=[ z, r, t])
         else:
@@ -205,7 +204,31 @@ def mspec_to_stream(rundirectory, model, reduceVel=None, offset=None, phase_list
             stream.append(r)
             stream.append(t)
         metadata = create_fake_metadata(model, loccode, bandcode, gaincode, ampStyle=AMP_STYLE_VEL)
-        inv = obspy.read_inventory(StringIO(metadata))
-        stream.attach_response(inv)
+        chan_inv = obspy.read_inventory(StringIO(metadata))
+        inv = combine_inventory(inv, chan_inv)
 
+    stream.attach_response(inv)
     return stream, inv
+
+def combine_inventory(inv, to_add):
+    if inv is None:
+        return to_add
+    for add_n in to_add:
+        found_n = False
+        for inv_n in inv:
+            if add_n.code == inv_n.code:
+                found_n = True
+                found_s = False
+                for add_s in add_n:
+                    for inv_s in inv_n:
+                        if add_s.code == inv_s.code:
+                            found_s = True
+                            for c in add_s:
+                                inv_s.channels.append(c)
+                            break
+                    if not found_s:
+                        inv_n.stations.append(add_s)
+                break
+        if not found_n:
+            inv.append(add_n)
+    return inv

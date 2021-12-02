@@ -121,8 +121,11 @@ def create_metadata(network, station, loccode, bandcode, gaincode, model, scalar
     }
     return emptyStationXML.format(**data).strip()
 
+def create_stacode_for_dist(dist_km):
+    deg = dist_km/111.19
+    return str(round(deg, 2)).replace('.','_')
 
-def create_fake_metadata(model, loccode, bandcode, gaincode, ampStyle=AMP_STYLE_VEL):
+def create_fake_metadata(model, loccode, bandcode, gaincode, ampStyle=AMP_STYLE_VEL, inventory=None):
     network_code="XX"
     gain=1.0
     inputunits = "m/s"
@@ -130,9 +133,9 @@ def create_fake_metadata(model, loccode, bandcode, gaincode, ampStyle=AMP_STYLE_
         inputunits = "m"
     distList = model.list_distances()
     fakeXml = None
-    for d in distList:
-        deg = d/111.19
-        station_code = str(round(deg, 2)).replace('.','_')
+    for dist_km in distList:
+        deg = dist_km/111.19
+        station_code = create_stacode_for_dist(dist_km)
         data = {
           "netcode": network_code,
           "stacode": station_code,
