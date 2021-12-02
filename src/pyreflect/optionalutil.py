@@ -158,13 +158,20 @@ def mspec_to_stream(rundirectory, model, reduceVel, offset, phase_list=["P","S"]
                     'idep': idep
                 }
             }
-        # add arrival times and phase name as flags in SAC header
-        arrivals = taupymodel.get_travel_times(source_depth_in_km=tsObj['depth'],
-                                              distance_in_degree=tsObj['distance']*km_to_deg,
-                                              phase_list=phase_list)
-        for idx, a in enumerate(arrivals):
-            commonHeader['sac'][f"t{idx}"] = a.time
-            commonHeader['sac'][f"kt{idx}"] = a.name
+        if tsObj['mech'] != "mij":
+            loccode = tsObj['mech'].upper()
+        else:
+            print(f"mech: {tsObj['mech']}")
+            loccode = 'SY'
+        commonHeader['location'] = loccode
+        if len(phase_list) != 0:
+            # add arrival times and phase name as flags in SAC header
+            arrivals = taupymodel.get_travel_times(source_depth_in_km=tsObj['depth'],
+                                                  distance_in_degree=tsObj['distance']*km_to_deg,
+                                                  phase_list=phase_list)
+            for idx, a in enumerate(arrivals):
+                commonHeader['sac'][f"t{idx}"] = a.time
+                commonHeader['sac'][f"kt{idx}"] = a.name
         header = Stats(commonHeader)
         header.component = 'Z'
         header.npts = len(tsObj['z'])
