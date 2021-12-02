@@ -41,6 +41,7 @@ def estimate_for_phases(dist_params, source_depths, phase_list, base_model="ak13
     radiusOfEarth = 6371 # for flat to spherical ray param conversion, should get from model
     maxDepth = 0
     minRayParam = WAY_BIG
+    max_red_vel = 0
     maxRayParam = -1
     earliestArrival = None
 
@@ -57,6 +58,9 @@ def estimate_for_phases(dist_params, source_depths, phase_list, base_model="ak13
                 maxRayParam = max(maxRayParam, a.ray_param)
                 for p in a.pierce:
                     maxDepth = max(maxDepth, p[DEPTH_INDEX])
+                a_redvel = DistAz.degreesToKilometers(a.distance) / a.time
+                if a_redvel > max_red_vel:
+                    max_red_vel = a_redvel
 
     maxDepth = round(math.ceil(maxDepth + max_depth_offset)) # little bit deeper
     minRayParam = minRayParam/radiusOfEarth # need to be flat earth ray params
@@ -77,8 +81,8 @@ def estimate_for_phases(dist_params, source_depths, phase_list, base_model="ak13
         "controlfac": 1.0
         }
     model.extra["earliest_arrival"] = arrival_to_dict(earliestArrival)
-    model.extra["reduce_velocity"] = \
-        DistAz.degreesToKilometers(earliestArrival.distance) / earliestArrival.time
+    if max_red_vel > 0:
+        model.extra["reduce_velocity"] = max_red_vel
     model.extra["phase_list"] = phase_list
     return model
 
@@ -224,7 +228,13 @@ def combine_inventory(inv, to_add):
                         if add_s.code == inv_s.code:
                             found_s = True
                             for c in add_s:
-                                inv_s.channels.append(c)
+                                found_c = False
+                                for inv_c in inv_s:
+                                    if inv_c.code == c.code and inv_c.location_code == c.location_code:
+                                        founc_c = True
+                                        break
+                                if not found_c:
+                                    inv_s.channels.append(c)
                             break
                     if not found_s:
                         inv_n.stations.append(add_s)
