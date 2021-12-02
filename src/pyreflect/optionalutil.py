@@ -149,8 +149,7 @@ def mspec_to_stream(rundirectory, model, reduceVel=None, offset=None, phase_list
         phase_list = model.extra['phase_list']
 
     km_to_deg = 180/taupymodel.model.radius_of_planet
-    results = readSpecFile(os.path.join(rundirectory, mspec_filename),reduceVel = reduceVel, offset = offset)
-    ampStyle = results['inputs']['time']['ampStyle']
+    results = readSpecFile(os.path.join(rundirectory, mspec_filename), ampStyle=ampStyle, reduceVel = reduceVel, offset = offset)
     if ampStyle == AMP_STYLE_VEL:
         idep = obspy.io.sac.header.ENUM_VALS['ivel']
     elif ampStyle == AMP_STYLE_DISP:
