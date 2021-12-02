@@ -79,7 +79,7 @@ def estimate_for_phases(dist_params, source_depths, phase_list, base_model="ak13
     model.extra["earliest_arrival"] = arrival_to_dict(earliestArrival)
     model.extra["reduce_velocity"] = \
         DistAz.degreesToKilometers(earliestArrival.distance) / earliestArrival.time
-    print(f"earliest: {earliestArrival}")
+    model.extra["phase_list"] = phase_list
     return model
 
 def arrival_to_dict(a):
@@ -123,7 +123,7 @@ def create_taupymodel(model, extendmodel=AK135F):
         taup.model = tau_model
     return taup
 
-def mspec_to_stream(rundirectory, model, reduceVel=None, offset=None, phase_list=["P","S"], ampStyle=AMP_STYLE_VEL, mspec_filename='mspec'):
+def mspec_to_stream(rundirectory, model, reduceVel=None, offset=None, phase_list=None, ampStyle=AMP_STYLE_VEL, mspec_filename='mspec'):
     check_obspy_import_ok()
     stream = None
     bandcode = 'B'
@@ -140,6 +140,9 @@ def mspec_to_stream(rundirectory, model, reduceVel=None, offset=None, phase_list
         offset = model.extra['offset']
     elif offset is None:
         offset = 0.0
+    if phase_list is None and model.extra['phase_list'] is not None:
+        phase_list = model.extra['phase_list']
+
     km_to_deg = 180/taupymodel.model.radius_of_planet
     results = readSpecFile(os.path.join(rundirectory, mspec_filename),reduceVel = reduceVel, offset = offset)
     ampStyle = results['inputs']['time']['ampStyle']
