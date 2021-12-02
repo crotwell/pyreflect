@@ -31,7 +31,7 @@ ROUND_SLOWNESS_DIGITS = 7
 
 DEPTH_INDEX=3 # index of depth in pierce points output
 WAY_BIG=sys.float_info.max
-def estimate_for_phases(dist_params, source_depths, phase_list, base_model="ak135"):
+def estimate_for_phases(dist_params, source_depths, phase_list, base_model="ak135", max_depth_offset=200.0):
     """calc travel times to estimate model depth and slowness values"""
     check_obspy_import_ok()
     nd_model_name = base_model
@@ -58,7 +58,7 @@ def estimate_for_phases(dist_params, source_depths, phase_list, base_model="ak13
                 for p in a.pierce:
                     maxDepth = max(maxDepth, p[DEPTH_INDEX])
 
-    maxDepth = round(math.ceil(maxDepth + 10)) # little bit deeper
+    maxDepth = round(math.ceil(maxDepth + max_depth_offset)) # little bit deeper
     minRayParam = minRayParam/radiusOfEarth # need to be flat earth ray params
     maxRayParam = maxRayParam/radiusOfEarth
     if base_model == "ak135" or base_model == AK135F:
