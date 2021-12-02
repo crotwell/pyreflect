@@ -230,7 +230,7 @@ def combine_inventory(inv, to_add):
                                 found_c = False
                                 for inv_c in inv_s:
                                     if inv_c.code == c.code and inv_c.location_code == c.location_code:
-                                        founc_c = True
+                                        found_c = True
                                         break
                                 if not found_c:
                                     inv_s.channels.append(c)
