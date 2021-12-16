@@ -151,9 +151,9 @@ def to_time_domain(results, reduceVel = 8.0, offset = -10.0, ampStyle=AMP_STYLE_
 
         for fnum in range(ifmin, ifmax+1):
             # apply reducing vel
-            u0[fnum] = u0[fnum] * cmath.exp( complex(0., (fnum)*reduceShift) )
-            w0[fnum] = w0[fnum] * cmath.exp( complex(0., (fnum)*reduceShift) )
-            tn[fnum] = tn[fnum] * cmath.exp( complex(0., (fnum)*reduceShift) )
+            u0[fnum] *= cmath.exp( complex(0., (fnum)*reduceShift) )
+            w0[fnum] *= cmath.exp( complex(0., (fnum)*reduceShift) )
+            tn[fnum] *= cmath.exp( complex(0., (fnum)*reduceShift) )
 
             # Displacement Spectrum has a factor of omeaga**2 from integration of k*dk
             #   the Kennett integration is over slowenss p*dp and leaves
@@ -181,9 +181,9 @@ def to_time_domain(results, reduceVel = 8.0, offset = -10.0, ampStyle=AMP_STYLE_
           	    wsf = -1j *fr*2 * math.pi*fr*2 * math.pi
             else:
                 raise Error(f"Dont understand amp/source style: {ampStyle} {sourceStyle}")
-            u0[i] = ws * u0[i]
-            w0[i] = ws * w0[i]
-            tn[i] = ws * tn[i]
+            u0[i] *= ws
+            w0[i] *= ws
+            tn[i] *= ws
 
             u0_td = numpy.fft.irfft(u0, nft)
             w0_td = numpy.fft.irfft(w0, nft)
