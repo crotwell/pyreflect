@@ -111,12 +111,18 @@ class EarthModel:
             f.write(self.asGER())
     @staticmethod
     def parseGER(modelLines):
+        if isinstance(modelLines, str):
+            modelLines = modelLines.splitlines()
+        if type(modelLines) != list:
+            raise ValueError(f"input should be list of lines, but found {type(modelLines)}")
         out = EarthModel()
         out.layers = []
         i=0
         numLayers = int(modelLines[0].strip())
         for i in range(1, numLayers+1):
             line = modelLines[i].split()
+            if len(line) < 6:
+                raise ValueError(f"layer must have at least 5 numbers: {modelLines[i]}")
             layer = VelocityModelLayer(
                         float(line[0]),
                         float(line[1]),
