@@ -23,8 +23,7 @@ MECH_NAMES = {
   5: 'yy'
 }
 
-
-def readSpecFile(filename, reduceVel = 8.0, offset = -10.0, ampStyle=AMP_STYLE_VEL, sourceStyle=SOURCE_STYLE_STEP):
+def load_specfile(filename):
     """ Read mspec file generate by mgenkennett or mikjennett
 
     Output from original Fortran MasterSrcKennett.F:
@@ -36,14 +35,8 @@ def readSpecFile(filename, reduceVel = 8.0, offset = -10.0, ampStyle=AMP_STYLE_V
 
     results = {}
     inputs = {}
-    results['timeseries'] = []
     results['inputs'] = inputs
-    inputs['time'] = {
-        'reducevel': reduceVel,
-        'offset': offset,
-        'ampStyle': ampStyle,
-        'sourceStyle': sourceStyle
-        }
+    results['timeseries'] = []
 
     struct_fmt = '3fifi3if'
     struct_len = struct.calcsize(struct_fmt)
@@ -93,7 +86,6 @@ def readSpecFile(filename, reduceVel = 8.0, offset = -10.0, ampStyle=AMP_STYLE_V
         nft =  2 * ( freq['nfpts'] - 1 )
         for r in range(inputs['numranges']):
             distance = inputs['ranges'][r]
-            timeReduce = distance / reduceVel + offset
 
             for d in range(inputs['numdepths']):
                 depth = inputs['depths'][d]
@@ -111,76 +103,99 @@ def readSpecFile(filename, reduceVel = 8.0, offset = -10.0, ampStyle=AMP_STYLE_V
                         w0[fnum] = complex(w_real,  w_imag)
                         tn[fnum]  = complex(t_real,  t_imag)
 
-                    u0_raw = u0.copy()
-                    w0_raw = w0.copy()
-                    tn_raw = tn.copy()
-
-                    reduceShift = timeReduce * 2*math.pi*freq['delta']
-
-                    for fnum in range(ifmin, ifmax+1):
-                        # apply reducing vel
-                        u0[fnum] = u0[fnum] * cmath.exp( complex(0., (fnum)*reduceShift) )
-                        w0[fnum] = w0[fnum] * cmath.exp( complex(0., (fnum)*reduceShift) )
-                        tn[fnum] = tn[fnum] * cmath.exp( complex(0., (fnum)*reduceShift) )
-
-# Displacement Spectrum has a factor of omeaga**2 from integration of k*dk
-#   the Kennett integration is over slowenss p*dp and leaves
-#   the remaining factor of omega**2 and and source time spectrum
-#   to be included here,
-#   Mij moment sources have omega**2 but Fk force sources only omega
-#   because the point force source has 1/omega to include
-#   Step Source Time Function  is 1/(-i*omega)
-#   Impulse Source Time Function is 1
-# Velocity spectrum has a factor of (i*omega) * omega**2 [d/dt displ]
-                    twopi = 2* math.pi
-                    for i in range(freq['nfpts']):
-                        fr = (i)*freq['delta']
-                        if ampStyle == AMP_STYLE_DISP and sourceStyle == SOURCE_STYLE_STEP:
-                      	    ws = 1j * fr * 2 * math.pi
-                      	    wsf = 1j
-                        elif ampStyle == AMP_STYLE_DISP and sourceStyle == SOURCE_STYLE_IMPULSE:
-                      	    ws = -1.*fr*twopi*fr*2 * math.pi
-                      	    wsf = -1.*fr*twopi
-                        elif ampStyle == AMP_STYLE_VEL and sourceStyle == SOURCE_STYLE_STEP:
-                      	    ws = -1.*fr*2 * math.pi*fr*2 * math.pi
-                      	    wsf = -1.*fr*2 * math.pi
-                        elif ampStyle == AMP_STYLE_VEL and sourceStyle == SOURCE_STYLE_IMPULSE:
-                      	    ws = -1j *fr*2 * math.pi*fr*2 * math.pi*fr*2 * math.pi
-                      	    wsf = -1j *fr*2 * math.pi*fr*2 * math.pi
-                        else:
-                            raise Error(f"Dont understand amp/source style: {ampStyle} {sourceStyle}")
-
-                        u0[i] = ws * u0[i]
-                        w0[i] = ws * w0[i]
-                        tn[i] = ws * tn[i]
-
-                    u0_td = numpy.fft.irfft(u0, nft)
-                    w0_td = numpy.fft.irfft(w0, nft)
-                    tn_td = numpy.fft.irfft(tn, nft)
-
-                    #scaleFac = 1 /(nft * dt * 4 * math.pi)
-                    scaleFac = -1 /( dt * 4 * math.pi) # nft taken care of in fft
-                    u0_td = u0_td * scaleFac
-                    w0_td = w0_td * scaleFac
-                    tn_td = tn_td * scaleFac
-
                     mech = "mij"
                     greens = {}
                     if (inputs['numsources'] > 1):
                         mech = MECH_NAMES.get(s, "invalid source mech, not 0-5")
                     timeseries = {
-                      "timeReduce": timeReduce,
+                      "timeReduce": None,
                       "distance": distance,
                       "depth": depth,
                       "mech": mech,
-                      "z": u0_td, # z down in GER style synthetics
-                      "r": w0_td,
-                      "t": tn_td,
+                      "z": None, # z down in GER style synthetics
+                      "r": None,
+                      "t": None,
                       "raw": {
-                        "u0": u0_raw,
-                        "w0": w0_raw,
-                        "tn": tn_raw
+                        "u0": u0,
+                        "w0": w0,
+                        "tn": tn
                       }
                     };
                     results['timeseries'].append(timeseries)
     return results
+
+def to_time_domain(results, reduceVel = 8.0, offset = -10.0, ampStyle=AMP_STYLE_VEL, sourceStyle=SOURCE_STYLE_STEP):
+    inputs = results['inputs']
+    inputs['time'] = {
+        'reducevel': reduceVel,
+        'offset': offset,
+        'ampStyle': ampStyle,
+        'sourceStyle': sourceStyle
+        }
+
+    freq = inputs['frequency']
+    dt = 1. / ( 2 * freq['nyquist'] )
+    ifmin = round(freq['min'] / freq['delta'])
+    ifmax = ifmin+inputs['frequency']['nffpts']-1
+    nft =  2 * ( freq['nfpts'] - 1 )
+    for ts in results['timeseries']:
+        u0 = ts['raw']['u0'].copy()
+        w0 = ts['raw']['w0'].copy()
+        tn = ts['raw']['tn'].copy()
+
+        distance = ts['distance']
+        timeReduce = distance / reduceVel + offset
+        reduceShift = timeReduce * 2*math.pi*freq['delta']
+
+        ts["timeReduce"] = timeReduce
+
+        for fnum in range(ifmin, ifmax+1):
+            # apply reducing vel
+            u0[fnum] = u0[fnum] * cmath.exp( complex(0., (fnum)*reduceShift) )
+            w0[fnum] = w0[fnum] * cmath.exp( complex(0., (fnum)*reduceShift) )
+            tn[fnum] = tn[fnum] * cmath.exp( complex(0., (fnum)*reduceShift) )
+
+            # Displacement Spectrum has a factor of omeaga**2 from integration of k*dk
+            #   the Kennett integration is over slowenss p*dp and leaves
+            #   the remaining factor of omega**2 and and source time spectrum
+            #   to be included here,
+            #   Mij moment sources have omega**2 but Fk force sources only omega
+            #   because the point force source has 1/omega to include
+            #   Step Source Time Function  is 1/(-i*omega)
+            #   Impulse Source Time Function is 1
+            # Velocity spectrum has a factor of (i*omega) * omega**2 [d/dt displ]
+        twopi = 2* math.pi
+        for i in range(freq['nfpts']):
+            fr = (i)*freq['delta']
+            if ampStyle == AMP_STYLE_DISP and sourceStyle == SOURCE_STYLE_STEP:
+          	    ws = 1j * fr * 2 * math.pi
+          	    wsf = 1j
+            elif ampStyle == AMP_STYLE_DISP and sourceStyle == SOURCE_STYLE_IMPULSE:
+          	    ws = -1.*fr*twopi*fr*2 * math.pi
+          	    wsf = -1.*fr*twopi
+            elif ampStyle == AMP_STYLE_VEL and sourceStyle == SOURCE_STYLE_STEP:
+          	    ws = -1.*fr*2 * math.pi*fr*2 * math.pi
+          	    wsf = -1.*fr*2 * math.pi
+            elif ampStyle == AMP_STYLE_VEL and sourceStyle == SOURCE_STYLE_IMPULSE:
+          	    ws = -1j *fr*2 * math.pi*fr*2 * math.pi*fr*2 * math.pi
+          	    wsf = -1j *fr*2 * math.pi*fr*2 * math.pi
+            else:
+                raise Error(f"Dont understand amp/source style: {ampStyle} {sourceStyle}")
+            u0[i] = ws * u0[i]
+            w0[i] = ws * w0[i]
+            tn[i] = ws * tn[i]
+
+            u0_td = numpy.fft.irfft(u0, nft)
+            w0_td = numpy.fft.irfft(w0, nft)
+            tn_td = numpy.fft.irfft(tn, nft)
+
+            #scaleFac = 1 /(nft * dt * 4 * math.pi)
+            scaleFac = -1 /( dt * 4 * math.pi) # nft taken care of in fft
+            ts['z'] = u0_td * scaleFac
+            ts['r'] = w0_td * scaleFac
+            ts['t'] = tn_td * scaleFac
+    return results
+
+def readSpecFile(filename, reduceVel = 8.0, offset = -10.0, ampStyle=AMP_STYLE_VEL, sourceStyle=SOURCE_STYLE_STEP):
+    results = loadSpecFile(filename)
+    return to_time_domain(results, reduceVel=reduceVel, offset=offset,ampStyle=ampStyle,sourceStyle=sourceStyle)
