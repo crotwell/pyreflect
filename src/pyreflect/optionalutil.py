@@ -6,7 +6,7 @@ import math
 import tempfile
 from io import StringIO
 from .earthmodel import EarthModel, list_distances
-from .specfile import readSpecFile, AMP_STYLE_VEL, AMP_STYLE_DISP
+from .specfile import load_specfile, to_time_domain, AMP_STYLE_VEL, AMP_STYLE_DISP
 from .velocitymodel import AK135F, depth_points_from_layers, load_nd_as_depth_points, extend_whole_earth, save_nd
 from .stationmetadata import create_fake_metadata, create_stacode_for_dist
 from .distaz import DistAz
@@ -128,7 +128,12 @@ def create_taupymodel(model, extendmodel=AK135F):
     return taup
 
 def mspec_to_stream(rundirectory, model, reduceVel=None, offset=None, phase_list=None, ampStyle=AMP_STYLE_VEL, mspec_filename='mspec'):
+    results = load_specfile(os.path.join(rundirectory, mspec_filename))
+    return results_to_stream(results, model, ampStyle=ampStyle, reduceVel = reduceVel, offset = offset)
+
+def results_to_stream(results, model, reduceVel=None, offset=None, phase_list=None, ampStyle=AMP_STYLE_VEL, mspec_filename='mspec'):
     check_obspy_import_ok()
+    results = to_time_domain(results, ampStyle=ampStyle, reduceVel = reduceVel, offset = offset)
     stream = None
     inv = None
     bandcode = 'B'
@@ -145,11 +150,10 @@ def mspec_to_stream(rundirectory, model, reduceVel=None, offset=None, phase_list
         offset = model.extra['offset']
     elif offset is None:
         offset = 0.0
-    if phase_list is None and model.extra['phase_list'] is not None:
+    if phase_list is None and 'phase_list' in model.extra and model.extra['phase_list'] is not None:
         phase_list = model.extra['phase_list']
 
     km_to_deg = 180/taupymodel.model.radius_of_planet
-    results = readSpecFile(os.path.join(rundirectory, mspec_filename), ampStyle=ampStyle, reduceVel = reduceVel, offset = offset)
     if ampStyle == AMP_STYLE_VEL:
         idep = obspy.io.sac.header.ENUM_VALS['ivel']
     elif ampStyle == AMP_STYLE_DISP:
@@ -180,7 +184,7 @@ def mspec_to_stream(rundirectory, model, reduceVel=None, offset=None, phase_list
             print(f"mech: {tsObj['mech']}")
             loccode = 'SY'
         commonHeader['location'] = loccode
-        if len(phase_list) != 0:
+        if phase_list is not None and len(phase_list) != 0:
             # add arrival times and phase name as flags in SAC header
             arrivals = taupymodel.get_travel_times(source_depth_in_km=tsObj['depth'],
                                                   distance_in_degree=tsObj['distance']*km_to_deg,

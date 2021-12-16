@@ -197,5 +197,5 @@ def to_time_domain(results, reduceVel = 8.0, offset = -10.0, ampStyle=AMP_STYLE_
     return results
 
 def readSpecFile(filename, reduceVel = 8.0, offset = -10.0, ampStyle=AMP_STYLE_VEL, sourceStyle=SOURCE_STYLE_STEP):
-    results = loadSpecFile(filename)
+    results = load_specfile(filename)
     return to_time_domain(results, reduceVel=reduceVel, offset=offset,ampStyle=ampStyle,sourceStyle=sourceStyle)

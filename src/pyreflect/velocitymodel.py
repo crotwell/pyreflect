@@ -154,7 +154,7 @@ def save_nd(points, filename):
     with open(filename, 'w') as out:
         prev = points[0]
         for p in points:
-            if p.type != prev.type:
+            if p.type != prev.type and prev.type != "unknown" and p.type != "unknown":
                 out.write(f"{p.type}\n")
             out.write(f"{round(p.depth, 6):<8} {round(p.vp, 6):<8} {round(p.vs, 6):<8} {round(p.rho, 6):<8}\n")
             prev = p
