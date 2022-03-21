@@ -23,5 +23,9 @@ See https://packaging.python.org/tutorials/packaging-projects/#creating-the-pack
 ```
 python3 -m pip install --upgrade build
 python3 -m build
-pip install dist/pyreflect-0.1.0-py3-none-any.whl --force-reinstall
+pip install dist/pyreflect-0.1.1-py3-none-any.whl --force-reinstall
+```
+or
+```
+python3 -m pip install -e .
 ```
