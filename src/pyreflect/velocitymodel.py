@@ -1,6 +1,7 @@
 import pkgutil
 import math
 import copy
+import os
 try:
     import crustone
     crustone_ok = True
@@ -112,9 +113,17 @@ class VelocityModelLayer:
         return f"{self.thick} {self.vp} {self.vs} {self.rho}"
 
 def load_nd_as_depth_points(modelname=AK135F):
-    nd_data = pkgutil.get_data(__name__, f"data/{modelname}.nd")
-    if nd_data is None:
-        return None
+    nd_data = None
+    if os.path.exists(f"{modelname}.nd"):
+        with open(f"{modelname}.nd", "r") as infile:
+            nd_data = infile.read()
+    elif os.path.exists(f"{modelname}"):
+        with open(f"{modelname}", "r") as infile:
+            nd_data = infile.read()
+    else:
+        nd_data = pkgutil.get_data(__name__, f"data/{modelname}.nd")
+        if nd_data is None:
+            return None
     ndtext = nd_data.decode('ascii')
     points = []
     layer_type = "crust"
@@ -216,9 +225,7 @@ def layersFromAk135f(maxdepth):
 def layersFromPrem(maxdepth):
     return layers_from_model(PREM, maxdepth)
 
-def layers_from_model(modelname, maxdepth):
-    points = load_nd_as_depth_points(modelname)
-    model_layers = layers_from_depth_points(points)
+def trim_layers_for_depth(model_layers, maxdepth):
     depth = 0
     layers = []
     for layer in model_layers:
@@ -243,6 +250,12 @@ def layers_from_model(modelname, maxdepth):
             layers.append(halfspace)
             break
     return layers
+
+
+def layers_from_model(modelname, maxdepth):
+    points = load_nd_as_depth_points(modelname)
+    model_layers = layers_from_depth_points(points)
+    return trim_layers_for_depth(model_layers, maxdepth)
 
 def load_crustone():
     check_crustone_import_ok()
