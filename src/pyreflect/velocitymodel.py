@@ -113,18 +113,18 @@ class VelocityModelLayer:
         return f"{self.thick} {self.vp} {self.vs} {self.rho}"
 
 def load_nd_as_depth_points(modelname=AK135F):
-    nd_data = None
+    ndtext = None
     if os.path.exists(f"{modelname}.nd"):
         with open(f"{modelname}.nd", "r") as infile:
-            nd_data = infile.read()
+            ndtext = infile.read()
     elif os.path.exists(f"{modelname}"):
         with open(f"{modelname}", "r") as infile:
-            nd_data = infile.read()
+            ndtext = infile.read()
     else:
         nd_data = pkgutil.get_data(__name__, f"data/{modelname}.nd")
         if nd_data is None:
             return None
-    ndtext = nd_data.decode('ascii')
+        ndtext = nd_data.decode('ascii')
     points = []
     layer_type = "crust"
     for line in ndtext.splitlines():
