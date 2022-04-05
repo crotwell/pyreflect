@@ -48,7 +48,7 @@ class VelocityModelLayer:
         self.rho = rho
         self.rho_gradient = 0
         self.qp = float(qp)
-        self.qs = qs
+        self.qs = float(qs)
         self.tp1 = tp1
         self.tp2 = tp2
         self.ts1 = ts1
@@ -131,11 +131,23 @@ def load_nd_as_depth_points(modelname=AK135F):
         if line == "mantle" or line == "outer-core" or line == "inner-core":
             layer_type = line
         else:
-            depth,vp,vs,rho,qp,qs = line.split()
-            p = VelocityModelPoint(float(depth), float(vp), float(vs))
-            p.rho = float(rho)
-            p.qp = float(qp)
-            p.qs = float(qs)
+            line_items = line.split()
+            depth = float(line_items[0])
+            vp = float(line_items[1])
+            vs = float(line_items[2])
+            rho = 2.6
+            if len(line_items)>3:
+                rho = float(line_items[3])
+            qp = 1500
+            if len(line_items)>4:
+                qp = float(line_items[4])
+            qs = 600
+            if len(line_items)>5:
+                qs = float(line_items[5])
+            p = VelocityModelPoint(depth, vp, vs)
+            p.rho = rho
+            p.qp = qp
+            p.qs = qs
             p.type = layer_type
             points.append(p)
     return points
