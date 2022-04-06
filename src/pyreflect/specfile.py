@@ -14,6 +14,9 @@ AMP_STYLE_VEL = 'velocity'
 SOURCE_STYLE_STEP = 'step'
 SOURCE_STYLE_IMPULSE = 'impulse'
 
+DEF_REDUCE_VEL=8.0
+DEF_OFFSET=0.0
+
 MECH_NAMES = {
   0: 'zz',
   1: 'xy',
@@ -124,7 +127,11 @@ def load_specfile(filename):
                     results['timeseries'].append(timeseries)
     return results
 
-def to_time_domain(results, reduceVel = 8.0, offset = -10.0, ampStyle=AMP_STYLE_VEL, sourceStyle=SOURCE_STYLE_STEP):
+def to_time_domain(results, reduceVel = DEF_REDUCE_VEL, offset = DEF_OFFSET, ampStyle=AMP_STYLE_VEL, sourceStyle=SOURCE_STYLE_STEP):
+    if reduceVel is None:
+        reduceVel = DEF_REDUCE_VEL
+    if offset is None:
+        offset = DEF_OFFSET
     inputs = results['inputs']
     inputs['time'] = {
         'reducevel': reduceVel,
@@ -196,6 +203,6 @@ def to_time_domain(results, reduceVel = 8.0, offset = -10.0, ampStyle=AMP_STYLE_
             ts['t'] = tn_td * scaleFac
     return results
 
-def readSpecFile(filename, reduceVel = 8.0, offset = -10.0, ampStyle=AMP_STYLE_VEL, sourceStyle=SOURCE_STYLE_STEP):
+def readSpecFile(filename, reduceVel = DEF_REDUCE_VEL, offset = -10.0, ampStyle=AMP_STYLE_VEL, sourceStyle=SOURCE_STYLE_STEP):
     results = load_specfile(filename)
     return to_time_domain(results, reduceVel=reduceVel, offset=offset,ampStyle=ampStyle,sourceStyle=sourceStyle)
